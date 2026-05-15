@@ -37,6 +37,7 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
 - Caption sample sizes: render `N=...` as native math when it appears in table or figure titles.
 - Headings: clear inherited italics from Heading 3 and appendix subheadings.
 - Front matter: copy or reconstruct from authoritative Word templates; never redraw complex cover pages by eye when handbook assets exist.
+- Front-matter anchors: do not trust copied style IDs across different DOCX files. Explicitly check and override cover field tables, date paragraphs, signature/date lines, and declaration/authorization page breaks after insertion.
 
 ## When More Detail Is Needed
 

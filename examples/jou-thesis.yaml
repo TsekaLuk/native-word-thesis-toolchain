@@ -2,6 +2,10 @@ references:
   heading: "参考文献"
   stop_prefixes: ["附录", "Appendix"]
 
+front_matter:
+  center_exact_texts: ["2026年6月"]
+  cover_table_markers: ["专业班级", "指导教师"]
+
 native_sample_size_captions: true
 
 math_tables:

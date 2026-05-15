@@ -404,6 +404,18 @@ def clear_heading_italics(body: etree._Element) -> None:
                         r_pr.remove(node)
 
 
+def center_exact_paragraphs(body: etree._Element, texts: list[str]) -> int:
+    exact = {text for text in texts if text}
+    if not exact:
+        return 0
+    count = 0
+    for p in body.xpath("./w:p", namespaces=NS):
+        if node_text(p) in exact:
+            set_jc(p, "center")
+            count += 1
+    return count
+
+
 def normalize_references(body: etree._Element, config: dict[str, Any]) -> None:
     heading = config.get("references", {}).get("heading", "参考文献")
     stop_prefixes = tuple(config.get("references", {}).get("stop_prefixes", ["附录", "Appendix"]))
@@ -552,6 +564,7 @@ def repair_caption_sample_math(body: etree._Element) -> int:
 def polish_document_xml(root: etree._Element, config: dict[str, Any]) -> dict[str, Any]:
     body = root.xpath("//w:body", namespaces=NS)[0]
     normalize_references(body, config)
+    centered_exact_count = center_exact_paragraphs(body, config.get("front_matter", {}).get("center_exact_texts", []))
     replaced_tables = replace_configured_math_tables(body, config)
     sample_caption_math_count = 0
     if config.get("native_sample_size_captions", True):
@@ -576,7 +589,11 @@ def polish_document_xml(root: etree._Element, config: dict[str, Any]) -> dict[st
             format_caption(child, keep_next=True)
         elif kind == "图" and is_real_figure_caption(children, idx):
             format_caption(child, keep_next=False)
-    return {"replaced_math_tables": replaced_tables, "sample_caption_math_count": sample_caption_math_count}
+    return {
+        "replaced_math_tables": replaced_tables,
+        "sample_caption_math_count": sample_caption_math_count,
+        "centered_exact_count": centered_exact_count,
+    }
 
 
 def enable_update_fields(unpacked: Path) -> None:

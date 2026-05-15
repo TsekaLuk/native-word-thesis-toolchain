@@ -26,9 +26,13 @@ def test_polish_removes_common_conversion_artifacts() -> None:
     assert report["reference_numPr_left"] == 0
     assert report["math_object_count"] >= 1
     assert report["heading_italic_left"] == []
+    assert report["uncentered_exact_texts"] == []
+    assert report["cover_table_count"] == 1
     refs = [p for p in document_root.xpath("//w:body/w:p", namespaces=NS) if node_text(p).startswith("[1]")]
     assert refs and refs[0].xpath("./w:pPr/w:wordWrap[@w:val='1']", namespaces=NS)
     assert refs[0].xpath("./w:pPr/w:suppressAutoHyphens[@w:val='1']", namespaces=NS)
+    dates = [p for p in document_root.xpath("//w:body/w:p", namespaces=NS) if node_text(p) == "2026年6月"]
+    assert dates and dates[0].xpath("./w:pPr/w:jc[@w:val='center']", namespaces=NS)
 
 
 def test_omml_builder_supports_display_formula_shapes() -> None:

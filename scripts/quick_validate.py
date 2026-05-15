@@ -12,6 +12,10 @@ from native_word_thesis.validate import validate_docx
 
 CONFIG = {
     "references": {"heading": "参考文献", "stop_prefixes": ["附录"]},
+    "front_matter": {
+        "center_exact_texts": ["2026年6月"],
+        "cover_table_markers": ["专业班级", "指导教师"],
+    },
     "native_sample_size_captions": True,
     "math_tables": [
         {
@@ -30,6 +34,12 @@ CONFIG = {
 
 def make_fixture(path: Path) -> None:
     doc = Document()
+    cover = doc.add_table(rows=2, cols=2)
+    cover.cell(0, 0).text = "专业班级："
+    cover.cell(0, 1).text = "信息与计算科学（嵌入式培养）  信嵌1221"
+    cover.cell(1, 0).text = "指导教师："
+    cover.cell(1, 1).text = "杨长青（副教授）"
+    doc.add_paragraph("2026年6月")
     doc.add_paragraph("参考文献")
     ref = doc.add_paragraph("张三. 示例文献[J]. 示例学报, 2024.")
     ref.style = "List Number"

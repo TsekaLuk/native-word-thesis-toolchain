@@ -31,6 +31,7 @@ def prev_content(children: list[etree._Element], idx: int) -> etree._Element | N
 
 def validate_docx(path: Path, config: dict[str, Any] | None = None) -> dict[str, Any]:
     config = config or {}
+    front_matter = config.get("front_matter", {})
     with zipfile.ZipFile(path) as zf:
         bad = zf.testzip()
         root = etree.fromstring(zf.read("word/document.xml"))
@@ -85,6 +86,21 @@ def validate_docx(path: Path, config: dict[str, Any] | None = None) -> dict[str,
         style = style_vals[0] if style_vals else ""
         if (style in {"Heading3", "3", "30"} or pattern.match(text)) and p.xpath(".//w:rPr/w:i|.//w:rPr/w:iCs", namespaces=NS):
             heading_italic.append(text)
+    center_exact_texts = set(front_matter.get("center_exact_texts", []))
+    uncentered_exact_texts = []
+    if center_exact_texts:
+        for p in root.xpath("//w:body/w:p", namespaces=NS):
+            text = node_text(p)
+            if text in center_exact_texts and not p.xpath("./w:pPr/w:jc[@w:val='center']", namespaces=NS):
+                uncentered_exact_texts.append(text)
+    cover_table_markers = list(front_matter.get("cover_table_markers", []))
+    cover_table_count = None
+    if cover_table_markers:
+        cover_table_count = sum(
+            1
+            for tbl in root.xpath("//w:tbl", namespaces=NS)
+            if all(marker in node_text(tbl) for marker in cover_table_markers)
+        )
     report = {
         "zip_ok": bad is None,
         "section_count": len(root.xpath("//w:sectPr", namespaces=NS)),
@@ -99,6 +115,8 @@ def validate_docx(path: Path, config: dict[str, Any] | None = None) -> dict[str,
         "uncentered_captions": [c["text"] for c in captions if not c["centered"]],
         "floating_table_captions": [c["text"] for c in captions if c["kind"] == "表" and not c["keep_next"]],
         "heading_italic_left": heading_italic,
+        "uncentered_exact_texts": uncentered_exact_texts,
+        "cover_table_count": cover_table_count,
     }
     report["ok"] = (
         report["zip_ok"]
@@ -106,6 +124,8 @@ def validate_docx(path: Path, config: dict[str, Any] | None = None) -> dict[str,
         and not report["uncentered_captions"]
         and not report["floating_table_captions"]
         and not report["heading_italic_left"]
+        and not report["uncentered_exact_texts"]
+        and (cover_table_count in {None, 1})
     )
     return report
 
