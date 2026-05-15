@@ -205,11 +205,29 @@ def make_math_run(text: str) -> etree._Element:
     return r
 
 
-def make_math_subscript(base: str, subscript: str) -> etree._Element:
+def make_math_text(text: str) -> etree._Element:
+    r = m_el("r")
+    r_pr = m_el("rPr")
+    r_pr.append(m_el("nor"))
+    r.append(r_pr)
+    t = m_el("t", text)
+    if text.startswith(" ") or text.endswith(" "):
+        t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    r.append(t)
+    return r
+
+
+def make_math_container(tag: str, parts: list[Any]) -> etree._Element:
+    node = m_el(tag)
+    append_math_parts(node, parts)
+    return node
+
+
+def make_math_subscript(base: str, subscript: str, *, normal_base: bool = False) -> etree._Element:
     node = m_el("sSub")
     node.append(m_el("sSubPr"))
     base_node = m_el("e")
-    base_node.append(make_math_run(base))
+    base_node.append(make_math_text(base) if normal_base else make_math_run(base))
     sub_node = m_el("sub")
     sub_node.append(make_math_run(subscript))
     node.append(base_node)
@@ -217,14 +235,99 @@ def make_math_subscript(base: str, subscript: str) -> etree._Element:
     return node
 
 
+def make_math_subsup(base_parts: list[Any], sub_parts: list[Any], sup_parts: list[Any]) -> etree._Element:
+    node = m_el("sSubSup")
+    node.append(m_el("sSubSupPr"))
+    node.append(make_math_container("e", base_parts))
+    node.append(make_math_container("sub", sub_parts))
+    node.append(make_math_container("sup", sup_parts))
+    return node
+
+
+def make_math_fraction(num_parts: list[Any], den_parts: list[Any]) -> etree._Element:
+    node = m_el("f")
+    node.append(m_el("fPr"))
+    node.append(make_math_container("num", num_parts))
+    node.append(make_math_container("den", den_parts))
+    return node
+
+
+def make_math_radical(parts: list[Any]) -> etree._Element:
+    node = m_el("rad")
+    rad_pr = m_el("radPr")
+    deg_hide = m_el("degHide")
+    deg_hide.set(qname(M, "val"), "1")
+    rad_pr.append(deg_hide)
+    node.append(rad_pr)
+    node.append(m_el("deg"))
+    node.append(make_math_container("e", parts))
+    return node
+
+
+def make_math_nary_sum(sub_parts: list[Any], sup_parts: list[Any], body_parts: list[Any]) -> etree._Element:
+    node = m_el("nary")
+    nary_pr = m_el("naryPr")
+    chr_node = m_el("chr")
+    chr_node.set(qname(M, "val"), "∑")
+    nary_pr.append(chr_node)
+    lim_loc = m_el("limLoc")
+    lim_loc.set(qname(M, "val"), "undOvr")
+    nary_pr.append(lim_loc)
+    if not sub_parts:
+        sub_hide = m_el("subHide")
+        sub_hide.set(qname(M, "val"), "1")
+        nary_pr.append(sub_hide)
+    if not sup_parts:
+        sup_hide = m_el("supHide")
+        sup_hide.set(qname(M, "val"), "1")
+        nary_pr.append(sup_hide)
+    node.append(nary_pr)
+    node.append(make_math_container("sub", sub_parts))
+    node.append(make_math_container("sup", sup_parts))
+    node.append(make_math_container("e", body_parts))
+    return node
+
+
+def math_parts(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else [value]
+
+
+def append_math_parts(parent: etree._Element, parts: list[Any]) -> None:
+    for part in parts:
+        if isinstance(part, etree._Element):
+            parent.append(part)
+        elif isinstance(part, dict) and "text" in part:
+            parent.append(make_math_text(str(part["text"])))
+        elif isinstance(part, dict) and "sub" in part:
+            base, sub = part["sub"]
+            parent.append(make_math_subscript(str(base), str(sub), normal_base=bool(part.get("normal_base"))))
+        elif isinstance(part, dict) and "subsup" in part:
+            base, sub, sup = part["subsup"]
+            parent.append(make_math_subsup(math_parts(base), math_parts(sub), math_parts(sup)))
+        elif isinstance(part, dict) and "frac" in part:
+            num, den = part["frac"]
+            parent.append(make_math_fraction(math_parts(num), math_parts(den)))
+        elif isinstance(part, dict) and "rad" in part:
+            parent.append(make_math_radical(math_parts(part["rad"])))
+        elif isinstance(part, dict) and "sum" in part:
+            spec = part["sum"]
+            if isinstance(spec, dict):
+                sub = math_parts(spec.get("sub", []))
+                sup = math_parts(spec.get("sup", []))
+                body = math_parts(spec.get("body", []))
+            else:
+                sub, sup, body = spec
+                sub = math_parts(sub)
+                sup = math_parts(sup)
+                body = math_parts(body)
+            parent.append(make_math_nary_sum(sub, sup, body))
+        else:
+            parent.append(make_math_run(str(part)))
+
+
 def make_omath(parts: list[Any]) -> etree._Element:
     math = m_el("oMath")
-    for part in parts:
-        if isinstance(part, dict) and "sub" in part:
-            base, sub = part["sub"]
-            math.append(make_math_subscript(str(base), str(sub)))
-        else:
-            math.append(make_math_run(str(part)))
+    append_math_parts(math, parts)
     return math
 
 

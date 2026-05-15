@@ -41,5 +41,6 @@ Supported cell values:
 - `{math: [...]}`: one OMML math object.
 - Mixed list: normal text and math objects inside one cell.
 - `{sub: ["s", "vec"]}` inside `math`: renders an OMML subscript.
+- Formula-grade math parts can also use `{text: "CTR"}` for upright operator text, `{frac: [num, den]}` for native fractions, `{rad: parts}` for square roots, `{sum: {sub: parts, sup: parts, body: parts}}` for native summations, and `{subsup: [base, sub, sup]}` for combined subscript/superscript notation.
 
 Prefer `≥` and `≤` over `>=` and `<=`; some office engines visually split ASCII comparisons.

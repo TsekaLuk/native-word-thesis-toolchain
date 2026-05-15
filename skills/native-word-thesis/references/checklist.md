@@ -11,6 +11,7 @@
 - Table captions are centered and keep with the following table.
 - Tables are centered and rows do not split across pages unless explicitly allowed.
 - Equations are OMML/native Word math where editability is expected.
+- Rendered formulas should preserve native structures such as fractions, roots, summation limits, and formula numbers; Pandoc-generated math that visually collapses into a plain text stream must be rewritten with OMML builders.
 - Appendix symbol cells do not show vertical fragments like `s`, `_`, `vec`.
 - Sample-size fragments in captions such as `N=250 samples` should use OMML for `N=250` when the school expects formula-grade typography.
 - Heading 3 and appendix subheadings are bold regular text, not italic.

@@ -33,7 +33,7 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
 - References: remove automatic list numbering before adding `[n]`.
 - Captions: center them and use `keepNext` for table captions.
 - Tables: center tables, add three-line borders when appropriate, and disable row splitting.
-- Math: use OMML for formulas and narrow symbolic table cells.
+- Math: use OMML for formulas and narrow symbolic table cells; repair collapsed Pandoc formulas by rebuilding fractions, roots, summation limits, and formula numbers as native OMML.
 - Caption sample sizes: render `N=...` as native math when it appears in table or figure titles.
 - Headings: clear inherited italics from Heading 3 and appendix subheadings.
 - Front matter: copy or reconstruct from authoritative Word templates; never redraw complex cover pages by eye when handbook assets exist.
