@@ -87,6 +87,9 @@ def validate_docx(path: Path, config: dict[str, Any] | None = None) -> dict[str,
             heading_italic.append(text)
     report = {
         "zip_ok": bad is None,
+        "section_count": len(root.xpath("//w:sectPr", namespaces=NS)),
+        "section_header_ref_count": len(root.xpath("//w:sectPr/w:headerReference", namespaces=NS)),
+        "section_page_start_count": len(root.xpath("//w:sectPr/w:pgNumType[@w:start]", namespaces=NS)),
         "reference_count": len(refs),
         "reference_numPr_left": sum(len(p.xpath("./w:pPr/w:numPr", namespaces=NS)) for p in refs),
         "math_object_count": len(root.xpath("//m:oMath", namespaces=NS)),

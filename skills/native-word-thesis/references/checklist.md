@@ -5,6 +5,7 @@
 - DOCX zip integrity passes.
 - Cover, declaration, authorization, abstract, TOC, body, references, and appendix all exist.
 - Body section has page header and page-number fields where required.
+- Front-matter sections should not accidentally inherit the正文 header; check section-level `headerReference` and `pgNumType` rather than only rendered body pages.
 - References render as `[1] ...`, not `1. [1] ...`.
 - Figure captions are below figures; table captions are above tables.
 - Table captions are centered and keep with the following table.
