@@ -1,0 +1,3 @@
+display_name: Native Word Thesis
+short_description: Convert thesis drafts into native Word deliverables with validation.
+default_prompt: Turn this LaTeX/PDF/DOCX thesis into a template-faithful native Word document, then validate and render-check the affected pages.

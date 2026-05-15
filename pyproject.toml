@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "native-word-thesis-toolchain"
+version = "0.1.0"
+description = "Reusable LaTeX/PDF-to-native-Word thesis polishing and validation toolkit"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "lxml>=4.9",
+  "python-docx>=1.1",
+  "PyYAML>=6.0",
+]
+
+[project.scripts]
+native-word-thesis = "native_word_thesis.cli:main"
+nwt = "native_word_thesis.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
