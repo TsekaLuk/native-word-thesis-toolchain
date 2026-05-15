@@ -12,6 +12,7 @@ from native_word_thesis.validate import validate_docx
 
 CONFIG = {
     "references": {"heading": "参考文献", "stop_prefixes": ["附录"]},
+    "native_sample_size_captions": True,
     "math_tables": [
         {
             "caption": "表A.1 推荐评分各分量权重与计算约定",
@@ -33,6 +34,12 @@ def make_fixture(path: Path) -> None:
     ref = doc.add_paragraph("张三. 示例文献[J]. 示例学报, 2024.")
     ref.style = "List Number"
     doc.add_paragraph("附录 A 推荐算法权重表与接口规范")
+    doc.add_paragraph("表6.3 推荐引擎端到端延迟实测（N=250 samples）")
+    perf = doc.add_table(rows=2, cols=2)
+    perf.cell(0, 0).text = "指标"
+    perf.cell(0, 1).text = "结果"
+    perf.cell(1, 0).text = "P50"
+    perf.cell(1, 1).text = "6.35"
     h3 = doc.add_paragraph()
     h3.style = "Heading 3"
     run = h3.add_run("A.1 混合推荐引擎评分权重")
@@ -56,8 +63,9 @@ def main() -> int:
         fixture = root / "fixture.docx"
         output = root / "output.docx"
         make_fixture(fixture)
-        polish_docx(fixture, output, CONFIG)
+        polish_report = polish_docx(fixture, output, CONFIG)
         report = validate_docx(output, CONFIG)
+        assert polish_report["sample_caption_math_count"] == 1, polish_report
         assert report["zip_ok"], report
         assert report["reference_count"] == 1, report
         assert report["reference_numPr_left"] == 0, report

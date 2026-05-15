@@ -132,6 +132,40 @@ def replace_paragraph_text(p: etree._Element, text: str) -> None:
                 t.text = ""
 
 
+def rewrite_paragraph_inline_math(p: etree._Element, parts: list[tuple[str, str | list[Any]]]) -> None:
+    p_pr = p.find("w:pPr", namespaces=NS)
+    preserved = [deepcopy(p_pr)] if p_pr is not None else []
+    for child in list(p):
+        p.remove(child)
+    for child in preserved:
+        p.append(child)
+    r_pr = make_text_rpr()
+    for kind, value in parts:
+        if kind == "text":
+            if value:
+                p.append(make_text_run(str(value), r_pr))
+        elif kind == "math":
+            p.append(make_omath(value if isinstance(value, list) else [str(value)]))
+
+
+def replace_sample_size_with_math(p: etree._Element) -> bool:
+    text = node_text(p)
+    matches = list(re.finditer(r"([（(])N\s*=\s*(\d+)\s*samples([）)])", text))
+    if not matches:
+        return False
+    parts: list[tuple[str, str | list[Any]]] = []
+    pos = 0
+    for match in matches:
+        parts.append(("text", text[pos : match.start()]))
+        parts.append(("text", match.group(1)))
+        parts.append(("math", ["N=", match.group(2)]))
+        parts.append(("text", " samples" + match.group(3)))
+        pos = match.end()
+    parts.append(("text", text[pos:]))
+    rewrite_paragraph_inline_math(p, parts)
+    return True
+
+
 def make_text_rpr(
     east_asia: str = "宋体",
     latin: str = "Times New Roman",
@@ -393,10 +427,21 @@ def replace_configured_math_tables(body: etree._Element, config: dict[str, Any])
     return replaced
 
 
+def repair_caption_sample_math(body: etree._Element) -> int:
+    count = 0
+    for p in body.xpath("./w:p", namespaces=NS):
+        if parse_caption(node_text(p)) and replace_sample_size_with_math(p):
+            count += 1
+    return count
+
+
 def polish_document_xml(root: etree._Element, config: dict[str, Any]) -> dict[str, Any]:
     body = root.xpath("//w:body", namespaces=NS)[0]
     normalize_references(body, config)
     replaced_tables = replace_configured_math_tables(body, config)
+    sample_caption_math_count = 0
+    if config.get("native_sample_size_captions", True):
+        sample_caption_math_count = repair_caption_sample_math(body)
     clear_heading_italics(body)
     children = list(body)
     for idx, child in enumerate(children):
@@ -417,7 +462,7 @@ def polish_document_xml(root: etree._Element, config: dict[str, Any]) -> dict[st
             format_caption(child, keep_next=True)
         elif kind == "图" and is_real_figure_caption(children, idx):
             format_caption(child, keep_next=False)
-    return {"replaced_math_tables": replaced_tables}
+    return {"replaced_math_tables": replaced_tables, "sample_caption_math_count": sample_caption_math_count}
 
 
 def enable_update_fields(unpacked: Path) -> None:

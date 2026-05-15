@@ -2,6 +2,8 @@ references:
   heading: "参考文献"
   stop_prefixes: ["附录", "Appendix"]
 
+native_sample_size_captions: true
+
 math_tables:
   - caption: "表A.1 推荐评分各分量权重与计算约定"
     widths: [2100, 1450, 1300, 3900]
@@ -12,7 +14,7 @@ math_tables:
       - ["向量语义相似度", {math: [{sub: ["s", "vec"]}]}, "0.35", "召回阶段已计算的画像向量与机会向量余弦相似度"]
       - ["技能标签匹配度", {math: [{sub: ["s", "skill"]}]}, "0.20", "标签集合的 Jaccard 相似系数"]
       - ["时间适配度", {math: [{sub: ["s", "time"]}]}, "0.15", "可用时段与服务时段的重叠比例"]
-      - ["距离适配度", {math: [{sub: ["s", "dist"]}]}, "0.15", "exp(-λd)，其中 d 为距离，λ 为衰减系数"]
+      - ["距离适配度", {math: [{sub: ["s", "dist"]}]}, "0.15", [{math: ["exp(-λd)"]}, "，其中 d 为距离，衰减系数 ", {math: ["λ=0.05"]}]]
       - ["可靠度", {math: [{sub: ["s", "rel"]}]}, "0.15", "历史履约率得分"]
 
   - caption: "表A.2 推荐理由生成触发条件"

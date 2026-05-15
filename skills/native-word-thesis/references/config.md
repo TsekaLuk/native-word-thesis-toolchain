@@ -12,6 +12,14 @@ references:
 
 The tool will scan paragraphs after the heading, remove Word list numbering, and ensure a single bracket prefix.
 
+## Caption Sample Sizes
+
+```yaml
+native_sample_size_captions: true
+```
+
+When enabled, table/figure captions such as `表6.3 ...（N=250 samples）` keep the caption text but render `N=250` as OMML math. This avoids reviewer-visible plain-text math in captions and figure/table lists.
+
 ## Math Tables
 
 Use `math_tables` to replace a fragile converted table after a matching caption.

@@ -11,6 +11,7 @@
 - Tables are centered and rows do not split across pages unless explicitly allowed.
 - Equations are OMML/native Word math where editability is expected.
 - Appendix symbol cells do not show vertical fragments like `s`, `_`, `vec`.
+- Sample-size fragments in captions such as `N=250 samples` should use OMML for `N=250` when the school expects formula-grade typography.
 - Heading 3 and appendix subheadings are bold regular text, not italic.
 - No raw test paths, stack traces, class paths, TODOs, or unresolved placeholders remain.
 
