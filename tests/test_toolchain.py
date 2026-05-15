@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import tempfile
+import zipfile
 from pathlib import Path
 
+from lxml import etree
 from scripts.quick_validate import CONFIG, make_fixture
 
 from native_word_thesis.ooxml import NS, make_omath, node_text, polish_docx
@@ -17,11 +19,16 @@ def test_polish_removes_common_conversion_artifacts() -> None:
         make_fixture(fixture)
         polish_docx(fixture, output, CONFIG)
         report = validate_docx(output, CONFIG)
+        with zipfile.ZipFile(output) as zf:
+            document_root = etree.fromstring(zf.read("word/document.xml"))
 
     assert report["ok"]
     assert report["reference_numPr_left"] == 0
     assert report["math_object_count"] >= 1
     assert report["heading_italic_left"] == []
+    refs = [p for p in document_root.xpath("//w:body/w:p", namespaces=NS) if node_text(p).startswith("[1]")]
+    assert refs and refs[0].xpath("./w:pPr/w:wordWrap[@w:val='1']", namespaces=NS)
+    assert refs[0].xpath("./w:pPr/w:suppressAutoHyphens[@w:val='1']", namespaces=NS)
 
 
 def test_omml_builder_supports_display_formula_shapes() -> None:

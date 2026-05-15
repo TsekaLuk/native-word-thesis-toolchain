@@ -112,6 +112,17 @@ def set_reference_paragraph(p: etree._Element) -> None:
     ind.set(qname(W, "left"), "720")
     ind.set(qname(W, "hanging"), "420")
     set_spacing(p)
+    # Bibliographies often contain DOI/URL and long English titles. Allow
+    # Latin strings to wrap inside the reference block, but suppress automatic
+    # hyphen insertion such as "sys-" / "tems".
+    word_wrap = p_pr.find("w:wordWrap", namespaces=NS)
+    if word_wrap is None:
+        word_wrap = etree.SubElement(p_pr, qname(W, "wordWrap"))
+    word_wrap.set(qname(W, "val"), "1")
+    suppress_hyphen = p_pr.find("w:suppressAutoHyphens", namespaces=NS)
+    if suppress_hyphen is None:
+        suppress_hyphen = etree.SubElement(p_pr, qname(W, "suppressAutoHyphens"))
+    suppress_hyphen.set(qname(W, "val"), "1")
 
 
 def replace_paragraph_text(p: etree._Element, text: str) -> None:

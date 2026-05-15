@@ -7,6 +7,7 @@
 - Body section has page header and page-number fields where required.
 - Front-matter sections should not accidentally inherit the正文 header; check section-level `headerReference` and `pgNumType` rather than only rendered body pages.
 - References render as `[1] ...`, not `1. [1] ...`.
+- References allow long DOI/URL and English titles to wrap within the reference block, while automatic English hyphenation is suppressed to avoid artifacts such as `sys-` / `tems`.
 - Figure captions are below figures; table captions are above tables.
 - Table captions are centered and keep with the following table.
 - Tables are centered and rows do not split across pages unless explicitly allowed.
