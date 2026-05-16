@@ -17,6 +17,10 @@ M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS = {"w": W, "r": R, "m": M}
+MATH_ENGINE_FONT = "Cambria Math"
+MATH_SYMBOL_FONT = "STIX Two Math"
+MATH_TEXT_FONT = "Cambria Math"
+MATH_UPRIGHT_TEXT_RE = re.compile(r"[A-Za-z]{2,}|@")
 
 
 def qname(ns: str, tag: str) -> str:
@@ -207,8 +211,23 @@ def make_text_run(text: str, r_pr: etree._Element | None = None) -> etree._Eleme
     return r
 
 
-def make_math_run(text: str) -> etree._Element:
+def is_upright_math_text(text: str) -> bool:
+    return bool(MATH_UPRIGHT_TEXT_RE.search(text))
+
+
+def make_math_word_rpr(font: str = MATH_SYMBOL_FONT, size_half_points: str = "21") -> etree._Element:
+    r_pr = etree.Element(qname(W, "rPr"))
+    fonts = etree.SubElement(r_pr, qname(W, "rFonts"))
+    for attr in ["ascii", "hAnsi", "eastAsia", "cs"]:
+        fonts.set(qname(W, attr), font)
+    etree.SubElement(r_pr, qname(W, "sz")).set(qname(W, "val"), size_half_points)
+    etree.SubElement(r_pr, qname(W, "szCs")).set(qname(W, "val"), size_half_points)
+    return r_pr
+
+
+def make_math_run(text: str, font: str = MATH_SYMBOL_FONT) -> etree._Element:
     r = m_el("r")
+    r.append(make_math_word_rpr(font))
     t = m_el("t", text)
     if text.startswith(" ") or text.endswith(" "):
         t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
@@ -221,6 +240,7 @@ def make_math_text(text: str) -> etree._Element:
     r_pr = m_el("rPr")
     r_pr.append(m_el("nor"))
     r.append(r_pr)
+    r.append(make_math_word_rpr(MATH_TEXT_FONT))
     t = m_el("t", text)
     if text.startswith(" ") or text.endswith(" "):
         t.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
@@ -332,6 +352,8 @@ def append_math_parts(parent: etree._Element, parts: list[Any]) -> None:
                 sup = math_parts(sup)
                 body = math_parts(body)
             parent.append(make_math_nary_sum(sub, sup, body))
+        elif isinstance(part, str) and is_upright_math_text(part):
+            parent.append(make_math_text(part))
         else:
             parent.append(make_math_run(str(part)))
 

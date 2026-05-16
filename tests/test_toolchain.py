@@ -14,6 +14,10 @@ from native_word_thesis.ooxml import NS, make_omath, node_text, polish_docx
 from native_word_thesis.validate import validate_docx
 
 
+def qn(prefix: str, tag: str) -> str:
+    return f"{{{NS[prefix]}}}{tag}"
+
+
 def test_polish_removes_common_conversion_artifacts() -> None:
     with tempfile.TemporaryDirectory(prefix="nwt-test-") as td:
         root = Path(td)
@@ -52,6 +56,8 @@ def test_omml_builder_supports_display_formula_shapes() -> None:
     assert len(formula.xpath(".//m:f", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:nary", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:rad", namespaces=NS)) == 1
+    assert formula.xpath('.//m:r[m:rPr/m:nor]/w:rPr/w:rFonts[@w:ascii="Cambria Math"]', namespaces=NS)
+    assert formula.xpath('.//m:r[not(m:rPr/m:nor)]/w:rPr/w:rFonts[@w:ascii="STIX Two Math"]', namespaces=NS)
 
 
 def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
@@ -68,6 +74,20 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
         latin.font.name = "Arial"
         math_para = doc.add_paragraph()
         math_para._p.append(make_omath(["100"]))
+        missing_font_math = etree.Element(qn("m", "oMath"))
+        missing_run = etree.SubElement(missing_font_math, qn("m", "r"))
+        etree.SubElement(missing_run, qn("m", "t")).text = "x"
+        math_para._p.append(missing_font_math)
+        wrong_upright_math = etree.Element(qn("m", "oMath"))
+        wrong_upright_run = etree.SubElement(wrong_upright_math, qn("m", "r"))
+        wrong_upright_mrpr = etree.SubElement(wrong_upright_run, qn("m", "rPr"))
+        etree.SubElement(wrong_upright_mrpr, qn("m", "nor"))
+        wrong_upright_wrpr = etree.SubElement(wrong_upright_run, qn("w", "rPr"))
+        wrong_upright_fonts = etree.SubElement(wrong_upright_wrpr, qn("w", "rFonts"))
+        for attr in ["ascii", "hAnsi", "eastAsia", "cs"]:
+            wrong_upright_fonts.set(qn("w", attr), "STIX Two Math")
+        etree.SubElement(wrong_upright_run, qn("m", "t")).text = "Precision"
+        math_para._p.append(wrong_upright_math)
         doc.save(docx)
 
         cfg.write_text(
@@ -91,6 +111,8 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
                     "math": {
                         "forbid_simple_numeric_omml": True,
                         "required_math_font": "Cambria Math",
+                        "allowed_math_run_fonts": ["Cambria Math", "STIX Two Math"],
+                        "upright_text_math_font": "Cambria Math",
                         "require_direct_math_run_font": True,
                     },
                 },
@@ -119,4 +141,5 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
     assert "forbidden_field_code_text" in codes
     assert "latin_font_mismatch" in codes
     assert "math_run_font_missing" in codes
+    assert "math_upright_text_font_mismatch" in codes
     assert "simple_numeric_omml" in codes

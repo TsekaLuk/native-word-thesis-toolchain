@@ -83,7 +83,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "min_subscript_count": None,
         "forbid_simple_numeric_omml": False,
         "required_math_font": None,
+        "allowed_math_run_fonts": [],
+        "upright_text_math_font": None,
         "require_direct_math_run_font": False,
+        "required_formula_fragments": [],
     },
 }
 
@@ -132,6 +135,15 @@ def ancestor_paragraph(node: etree._Element) -> etree._Element | None:
 
 def compact_text(text: str) -> str:
     return re.sub(r"\s+", "", text.replace("\u00a0", ""))
+
+
+def math_run_text(run: etree._Element) -> str:
+    return "".join(run.xpath(".//m:t/text()", namespaces=NS))
+
+
+def math_run_prefers_text_font(run: etree._Element) -> bool:
+    text = math_run_text(run)
+    return bool(run.xpath("./m:rPr/m:nor", namespaces=NS)) or bool(re.search(r"[A-Za-z]{2,}|@", text))
 
 
 def style_id(p: etree._Element) -> str:
@@ -544,10 +556,16 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                 "actual": configured_math_fonts,
             }
         )
+    allowed_math_run_fonts = set(math_cfg.get("allowed_math_run_fonts") or [])
+    if not allowed_math_run_fonts and required_math_font:
+        allowed_math_run_fonts = {required_math_font}
+    upright_text_math_font = math_cfg.get("upright_text_math_font")
     math_font_violations: list[dict[str, Any]] = []
-    if required_math_font and math_cfg.get("require_direct_math_run_font", False):
+    math_upright_text_font_violations: list[dict[str, Any]] = []
+    math_run_font_counts: dict[str, int] = {}
+    if math_cfg.get("require_direct_math_run_font", False):
         for run in body.xpath(".//m:r", namespaces=NS):
-            text = "".join(run.xpath(".//m:t/text()", namespaces=NS))
+            text = math_run_text(run)
             r_fonts = run.find("w:rPr/w:rFonts", namespaces=NS)
             if r_fonts is None:
                 item = {"text": text[:80], "ascii": None, "hAnsi": None, "eastAsia": None, "cs": None}
@@ -561,9 +579,15 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                 "eastAsia": r_fonts.get(qn("w:eastAsia")),
                 "cs": r_fonts.get(qn("w:cs")),
             }
-            if any(item[key] != required_math_font for key in ["ascii", "hAnsi", "eastAsia", "cs"]):
+            if item["ascii"]:
+                math_run_font_counts[item["ascii"]] = math_run_font_counts.get(item["ascii"], 0) + 1
+            actual_fonts = {item[key] for key in ["ascii", "hAnsi", "eastAsia", "cs"]}
+            if allowed_math_run_fonts and (None in actual_fonts or not actual_fonts.issubset(allowed_math_run_fonts)):
                 math_font_violations.append(item)
-                warnings.append({"code": "math_run_font_mismatch", "expected": required_math_font, **item})
+                warnings.append({"code": "math_run_font_mismatch", "expected": sorted(allowed_math_run_fonts), **item})
+            if upright_text_math_font and math_run_prefers_text_font(run) and any(item[key] != upright_text_math_font for key in ["ascii", "hAnsi", "eastAsia", "cs"]):
+                math_upright_text_font_violations.append(item)
+                warnings.append({"code": "math_upright_text_font_mismatch", "expected": upright_text_math_font, **item})
     math_count = len(body.xpath(".//m:oMath|.//m:oMathPara", namespaces=NS))
     subscript_count = len(body.xpath(".//m:sSub|.//m:sSup|.//m:sSubSup", namespaces=NS))
     simple_numeric_omml: list[str] = []
@@ -577,6 +601,40 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
         warnings.append({"code": "low_omml_count", "actual": math_count, "expected_min": math_cfg["min_omml_count"]})
     if math_cfg.get("min_subscript_count") is not None and subscript_count < int(math_cfg["min_subscript_count"]):
         warnings.append({"code": "low_math_subscript_count", "actual": subscript_count, "expected_min": math_cfg["min_subscript_count"]})
+
+    formula_fragment_checks: list[dict[str, Any]] = []
+    for spec in math_cfg.get("required_formula_fragments", []):
+        name = spec.get("name") or spec.get("anchor") or "formula"
+        anchor = compact_text(str(spec.get("anchor", "")))
+        matched = False
+        check = {"name": name, "anchor": spec.get("anchor", ""), "matched": False, "problems": []}
+        for p in body.xpath(".//w:p", namespaces=NS):
+            text = paragraph_text(p)
+            if anchor and anchor not in compact_text(text):
+                continue
+            matched = True
+            check["matched"] = True
+            for token, expected_count in (spec.get("must_contain_counts") or {}).items():
+                actual_count = text.count(token)
+                if actual_count < int(expected_count):
+                    check["problems"].append({"token": token, "actual": actual_count, "expected_min": int(expected_count)})
+            for xml_name, min_count in {
+                "m:f": spec.get("min_fraction_count"),
+                "m:nary": spec.get("min_nary_count"),
+                "m:rad": spec.get("min_radical_count"),
+                "m:sSub": spec.get("min_subscript_count"),
+            }.items():
+                if min_count is None:
+                    continue
+                actual_count = len(p.xpath(f".//{xml_name}", namespaces=NS))
+                if actual_count < int(min_count):
+                    check["problems"].append({"node": xml_name, "actual": actual_count, "expected_min": int(min_count)})
+            break
+        if not matched:
+            check["problems"].append({"anchor": spec.get("anchor", ""), "actual": 0, "expected_min": 1})
+        formula_fragment_checks.append(check)
+        if check["problems"]:
+            warnings.append({"code": "formula_fragment_incomplete", **check})
 
     if fix:
         document_tree.write(str(root_dir / "word/document.xml"), encoding="UTF-8", xml_declaration=True, standalone=True)
@@ -606,9 +664,12 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "latin_font_violations": latin_font_violations,
             "configured_math_fonts": configured_math_fonts,
             "math_font_violations": math_font_violations,
+            "math_upright_text_font_violations": math_upright_text_font_violations,
+            "math_run_font_counts": math_run_font_counts,
             "math_count": math_count,
             "math_subscript_count": subscript_count,
             "simple_numeric_omml": simple_numeric_omml,
+            "formula_fragment_checks": formula_fragment_checks,
         },
     }
 

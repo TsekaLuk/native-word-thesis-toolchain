@@ -110,6 +110,49 @@
     "min_subscript_count": 30,
     "forbid_simple_numeric_omml": true,
     "required_math_font": "Cambria Math",
-    "require_direct_math_run_font": true
+    "allowed_math_run_fonts": ["Cambria Math", "STIX Two Math"],
+    "upright_text_math_font": "Cambria Math",
+    "require_direct_math_run_font": true,
+    "required_formula_fragments": [
+      {
+        "name": "F1 fraction",
+        "anchor": "F1=",
+        "must_contain_counts": {
+          "Precision": 2,
+          "Recall": 2
+        },
+        "min_fraction_count": 1
+      },
+      {
+        "name": "Precision@10 fraction",
+        "anchor": "Precision@10=",
+        "must_contain_counts": {
+          "Top10": 1,
+          "rel": 1
+        },
+        "min_fraction_count": 1
+      },
+      {
+        "name": "NDCG@10 fraction",
+        "anchor": "NDCG@10=",
+        "must_contain_counts": {
+          "rel": 2,
+          "log": 2
+        },
+        "min_fraction_count": 2,
+        "min_nary_count": 2
+      },
+      {
+        "name": "CTR radical",
+        "anchor": "CTR=",
+        "must_contain_counts": {
+          "Top10": 1,
+          "rel": 1
+        },
+        "min_fraction_count": 1,
+        "min_nary_count": 1,
+        "min_radical_count": 1
+      }
+    ]
   }
 }
