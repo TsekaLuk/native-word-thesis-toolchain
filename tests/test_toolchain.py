@@ -88,7 +88,11 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
                         "required_ascii_hansi": "Times New Roman",
                         "require_direct_on_latin_runs": True,
                     },
-                    "math": {"forbid_simple_numeric_omml": True},
+                    "math": {
+                        "forbid_simple_numeric_omml": True,
+                        "required_math_font": "STIX Two Math",
+                        "require_direct_math_run_font": True,
+                    },
                 },
                 ensure_ascii=False,
             ),
@@ -114,4 +118,6 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
     codes = {warning["code"] for warning in report["warnings"]}
     assert "forbidden_field_code_text" in codes
     assert "latin_font_mismatch" in codes
+    assert "math_font_missing_or_mismatch" in codes
+    assert "math_run_font_missing" in codes
     assert "simple_numeric_omml" in codes

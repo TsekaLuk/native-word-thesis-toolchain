@@ -82,6 +82,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "min_omml_count": None,
         "min_subscript_count": None,
         "forbid_simple_numeric_omml": False,
+        "required_math_font": None,
+        "require_direct_math_run_font": False,
     },
 }
 
@@ -528,6 +530,40 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                 warnings.append({"code": "latin_font_mismatch", **item})
 
     math_cfg = cfg.get("math", {})
+    settings_root: etree._Element | None = None
+    settings_path = root_dir / "word/settings.xml"
+    if settings_path.exists():
+        settings_root = etree.parse(str(settings_path)).getroot()
+    configured_math_fonts = settings_root.xpath(".//m:mathFont/@m:val", namespaces=NS) if settings_root is not None else []
+    required_math_font = math_cfg.get("required_math_font")
+    if required_math_font and required_math_font not in configured_math_fonts:
+        warnings.append(
+            {
+                "code": "math_font_missing_or_mismatch",
+                "expected": required_math_font,
+                "actual": configured_math_fonts,
+            }
+        )
+    math_font_violations: list[dict[str, Any]] = []
+    if required_math_font and math_cfg.get("require_direct_math_run_font", False):
+        for run in body.xpath(".//m:r", namespaces=NS):
+            text = "".join(run.xpath(".//m:t/text()", namespaces=NS))
+            r_fonts = run.find("w:rPr/w:rFonts", namespaces=NS)
+            if r_fonts is None:
+                item = {"text": text[:80], "ascii": None, "hAnsi": None, "eastAsia": None, "cs": None}
+                math_font_violations.append(item)
+                warnings.append({"code": "math_run_font_missing", **item})
+                continue
+            item = {
+                "text": text[:80],
+                "ascii": r_fonts.get(qn("w:ascii")),
+                "hAnsi": r_fonts.get(qn("w:hAnsi")),
+                "eastAsia": r_fonts.get(qn("w:eastAsia")),
+                "cs": r_fonts.get(qn("w:cs")),
+            }
+            if any(item[key] != required_math_font for key in ["ascii", "hAnsi", "eastAsia", "cs"]):
+                math_font_violations.append(item)
+                warnings.append({"code": "math_run_font_mismatch", "expected": required_math_font, **item})
     math_count = len(body.xpath(".//m:oMath|.//m:oMathPara", namespaces=NS))
     subscript_count = len(body.xpath(".//m:sSub|.//m:sSup|.//m:sSubSup", namespaces=NS))
     simple_numeric_omml: list[str] = []
@@ -568,6 +604,8 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "front_empty_breaks": front_empty_breaks,
             "forbidden_field_code_hits": forbidden_field_code_hits,
             "latin_font_violations": latin_font_violations,
+            "configured_math_fonts": configured_math_fonts,
+            "math_font_violations": math_font_violations,
             "math_count": math_count,
             "math_subscript_count": subscript_count,
             "simple_numeric_omml": simple_numeric_omml,
