@@ -109,7 +109,7 @@
     "min_omml_count": 50,
     "min_subscript_count": 30,
     "forbid_simple_numeric_omml": true,
-    "required_math_font": "STIX Two Math",
+    "required_math_font": "Cambria Math",
     "require_direct_math_run_font": true
   }
 }
