@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
@@ -49,3 +52,66 @@ def test_omml_builder_supports_display_formula_shapes() -> None:
     assert len(formula.xpath(".//m:f", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:nary", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:rad", namespaces=NS)) == 1
+
+
+def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
+    with tempfile.TemporaryDirectory(prefix="nwt-guard-test-") as td:
+        root = Path(td)
+        docx = root / "artifact.docx"
+        cfg = root / "guard.json"
+
+        from docx import Document
+
+        doc = Document()
+        doc.add_paragraph('图 3.2 系统功能模块结构图 TC "图 3.2 系统功能模块结构图" \\f F \\l 1')
+        latin = doc.add_paragraph().add_run("ASP.NET Core")
+        latin.font.name = "Arial"
+        math_para = doc.add_paragraph()
+        math_para._p.append(make_omath(["100"]))
+        doc.save(docx)
+
+        cfg.write_text(
+            json.dumps(
+                {
+                    "heading_styles": [],
+                    "forbid_heading4": False,
+                    "caption_pattern": r"__never_match__",
+                    "require_caption_center": False,
+                    "require_caption_zero_indent": False,
+                    "require_drawing_center": False,
+                    "require_drawing_zero_indent": False,
+                    "field_codes": {
+                        "forbid_instr_text_patterns": [r"\bTC\b", r"TOC\s+\\h\s+\\z\s+\\f"],
+                        "forbid_visible_text_patterns": [r"\bTC\s+\"", r"\\f\s+[FT]\b", r"\\l\s+1\b"],
+                    },
+                    "latin_fonts": {
+                        "required_ascii_hansi": "Times New Roman",
+                        "require_direct_on_latin_runs": True,
+                    },
+                    "math": {"forbid_simple_numeric_omml": True},
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parents[1] / "scripts/ooxml_thesis_guard.py"),
+                str(docx),
+                "--config",
+                str(cfg),
+                "--fail-on-warnings",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    codes = {warning["code"] for warning in report["warnings"]}
+    assert "forbidden_field_code_text" in codes
+    assert "latin_font_mismatch" in codes
+    assert "simple_numeric_omml" in codes

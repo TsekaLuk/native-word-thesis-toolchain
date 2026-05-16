@@ -1,0 +1,112 @@
+{
+  "heading_styles": ["Heading1", "Heading2", "Heading3"],
+  "forbid_heading4": true,
+  "forbid_heading_bold": true,
+  "forbid_heading_italic": true,
+  "strip_heading_toggle_noise": true,
+  "strip_caption_toggle_noise": true,
+  "style_gallery": {
+    "required_names": {
+      "Normal": "正文",
+      "BodyText": "毕业设计（论文）正文",
+      "BodyText2": "毕业设计（论文）正文 2",
+      "BodyText3": "毕业设计（论文）正文 3",
+      "Heading1": "标题 1",
+      "Heading2": "标题 2",
+      "Heading3": "标题 3",
+      "Heading4": "标题 4",
+      "Caption": "题注",
+      "ListParagraph": "列表段落",
+      "TOCHeading": "目录标题",
+      "DefaultParagraphFont": "默认段落字体",
+      "Header": "页眉",
+      "Footer": "页脚",
+      "14": "页眉"
+    },
+    "visible_qformat_styles": [
+      "Normal",
+      "BodyText",
+      "BodyText2",
+      "BodyText3",
+      "Heading1",
+      "Heading2",
+      "Heading3",
+      "Caption",
+      "ListParagraph",
+      "TOCHeading",
+      "Header",
+      "Footer",
+      "14"
+    ],
+    "hidden_qformat_styles": [
+      "Heading4",
+      "Heading5",
+      "Heading6",
+      "Heading7",
+      "Heading8",
+      "Heading9",
+      "DefaultParagraphFont",
+      "Heading1Char",
+      "Heading2Char",
+      "Heading3Char",
+      "Heading4Char",
+      "Heading5Char",
+      "Heading6Char",
+      "Heading7Char",
+      "Heading8Char",
+      "Heading9Char",
+      "NoSpacing",
+      "Title",
+      "Subtitle",
+      "Quote",
+      "IntenseQuote"
+    ]
+  },
+  "caption_pattern": "^(图|表)\\s*\\d+[-.]\\d+\\s+",
+  "exclude_list_entries_with_tabs": true,
+  "require_caption_center": true,
+  "require_caption_zero_indent": true,
+  "require_drawing_center": true,
+  "require_drawing_zero_indent": true,
+  "drawing_max_width_in": 6.1,
+  "drawing_max_height_in": 6.5,
+  "header": {
+    "required_text_contains": "江苏海洋大学",
+    "require_zero_indent": true,
+    "require_bottom_border": true,
+    "bottom_border_color": "7F7F7F",
+    "bottom_border_size": "6",
+    "bottom_border_space": "1",
+    "require_nbsp_in_page_label": true,
+    "required_spacer_len": 32
+  },
+  "references": {
+    "headings_compact": ["参考文献"],
+    "stop_heading_prefixes": ["附录", "Appendix"],
+    "forbid_decimal_plus_bracket_numbering": true
+  },
+  "front_matter": {
+    "scan_first_paragraphs": 90,
+    "forbid_empty_break_paragraphs": true
+  },
+  "field_codes": {
+    "forbid_instr_text_patterns": [
+      "\\bTC\\b",
+      "TOC\\s+\\\\h\\s+\\\\z\\s+\\\\f"
+    ],
+    "forbid_visible_text_patterns": [
+      "\\bTC\\s+\\\"",
+      "\\\\f\\s+[FT]\\b",
+      "\\\\l\\s+1\\b"
+    ]
+  },
+  "latin_fonts": {
+    "required_ascii_hansi": "Times New Roman",
+    "require_direct_on_latin_runs": true
+  },
+  "math": {
+    "min_omml_count": 50,
+    "min_subscript_count": 30,
+    "forbid_simple_numeric_omml": true
+  }
+}
