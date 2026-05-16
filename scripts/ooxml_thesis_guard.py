@@ -28,6 +28,7 @@ M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 NS = {"w": W, "m": M, "wp": WP}
 EMU_PER_INCH = 914400
+MATH_OPERATOR_TEXT_RE = re.compile(r"^[\s=+\-−×÷*/≤≥<>:|,;(){}\[\]∈∩∪]+$")
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -65,6 +66,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "headings_compact": ["参考文献"],
         "stop_heading_prefixes": ["附录", "Appendix"],
         "forbid_decimal_plus_bracket_numbering": True,
+        "forbid_word_wrap": False,
+        "forbid_hard_line_breaks": False,
+        "max_text_runs_per_entry": None,
     },
     "front_matter": {
         "scan_first_paragraphs": 90,
@@ -85,6 +89,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "required_math_font": None,
         "allowed_math_run_fonts": [],
         "upright_text_math_font": None,
+        "operator_math_font": None,
+        "forbid_spaced_operator_runs": False,
         "forbidden_math_fonts": [],
         "require_direct_math_run_font": False,
         "required_formula_fragments": [],
@@ -140,6 +146,10 @@ def compact_text(text: str) -> str:
 
 def math_run_text(run: etree._Element) -> str:
     return "".join(run.xpath(".//m:t/text()", namespaces=NS))
+
+
+def is_operator_math_text(text: str) -> bool:
+    return bool(MATH_OPERATOR_TEXT_RE.fullmatch(text)) and any(not ch.isspace() for ch in text)
 
 
 def math_run_prefers_text_font(run: etree._Element) -> bool:
@@ -472,15 +482,48 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             ref_start = idx
             break
     duplicate_reference_numbers = []
-    if ref_start is not None and references_cfg.get("forbid_decimal_plus_bracket_numbering", True):
+    reference_word_wrap_hits: list[dict[str, Any]] = []
+    reference_hard_break_hits: list[dict[str, Any]] = []
+    reference_text_run_count_violations: list[dict[str, Any]] = []
+    reference_paragraphs: list[tuple[int, etree._Element, str]] = []
+    if ref_start is not None:
+        stop_prefixes = tuple(compact_text(item) for item in references_cfg.get("stop_heading_prefixes", []))
         for idx, p in enumerate(paragraphs[ref_start + 1 :], start=ref_start + 1):
             text = paragraph_text(p).strip()
-            if style_id(p).startswith("Heading") and text:
+            compact = compact_text(text)
+            if text and (style_id(p).startswith("Heading") or any(compact.startswith(prefix) for prefix in stop_prefixes)):
                 break
+            if not text:
+                continue
+            reference_paragraphs.append((idx, p, text))
+
+    if references_cfg.get("forbid_decimal_plus_bracket_numbering", True):
+        for idx, _p, text in reference_paragraphs:
             if re.match(r"^\d+\.\s*\[\d+\]", text):
                 duplicate_reference_numbers.append({"paragraph": idx, "text": text[:160]})
     for item in duplicate_reference_numbers:
         warnings.append({"code": "reference_double_numbering", **item})
+
+    max_reference_text_runs = references_cfg.get("max_text_runs_per_entry")
+    for idx, p, text in reference_paragraphs:
+        if references_cfg.get("forbid_word_wrap", False) and p.xpath("./w:pPr/w:wordWrap", namespaces=NS):
+            item = {"paragraph": idx, "text": text[:160]}
+            reference_word_wrap_hits.append(item)
+            warnings.append({"code": "reference_word_wrap_enabled", **item})
+        if references_cfg.get("forbid_hard_line_breaks", False) and p.xpath(".//w:br[not(@w:type) or @w:type='textWrapping']", namespaces=NS):
+            item = {"paragraph": idx, "text": text[:160]}
+            reference_hard_break_hits.append(item)
+            warnings.append({"code": "reference_hard_line_break", **item})
+        if max_reference_text_runs is not None:
+            text_runs = [
+                "".join(run.xpath("./w:t/text()", namespaces=NS))
+                for run in p.xpath(".//w:r[not(ancestor::m:oMath)]", namespaces=NS)
+            ]
+            text_runs = [item for item in text_runs if item]
+            if len(text_runs) > int(max_reference_text_runs):
+                item = {"paragraph": idx, "text_run_count": len(text_runs), "text": text[:160]}
+                reference_text_run_count_violations.append(item)
+                warnings.append({"code": "reference_text_run_count", "expected_max": int(max_reference_text_runs), **item})
 
     front_cfg = cfg.get("front_matter", {})
     front_empty_breaks = []
@@ -568,8 +611,12 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
     if not allowed_math_run_fonts and required_math_font:
         allowed_math_run_fonts = {required_math_font}
     upright_text_math_font = math_cfg.get("upright_text_math_font")
+    operator_math_font = math_cfg.get("operator_math_font")
+    forbid_spaced_operator_runs = bool(math_cfg.get("forbid_spaced_operator_runs", False))
     math_font_violations: list[dict[str, Any]] = []
     math_upright_text_font_violations: list[dict[str, Any]] = []
+    math_operator_font_violations: list[dict[str, Any]] = []
+    spaced_math_operator_runs: list[dict[str, Any]] = []
     math_run_font_counts: dict[str, int] = {}
     if math_cfg.get("require_direct_math_run_font", False):
         for run in body.xpath(".//m:r", namespaces=NS):
@@ -601,6 +648,13 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             if upright_text_math_font and math_run_prefers_text_font(run) and any(item[key] != upright_text_math_font for key in ["ascii", "hAnsi", "eastAsia", "cs"]):
                 math_upright_text_font_violations.append(item)
                 warnings.append({"code": "math_upright_text_font_mismatch", "expected": upright_text_math_font, **item})
+            if is_operator_math_text(text):
+                if operator_math_font and any(item[key] != operator_math_font for key in ["ascii", "hAnsi", "eastAsia", "cs"]):
+                    math_operator_font_violations.append(item)
+                    warnings.append({"code": "math_operator_font_mismatch", "expected": operator_math_font, **item})
+                if forbid_spaced_operator_runs and text != "".join(text.split()):
+                    spaced_math_operator_runs.append(item)
+                    warnings.append({"code": "spaced_math_operator_run", **item})
     math_count = len(body.xpath(".//m:oMath|.//m:oMathPara", namespaces=NS))
     subscript_count = len(body.xpath(".//m:sSub|.//m:sSup|.//m:sSubSup", namespaces=NS))
     simple_numeric_omml: list[str] = []
@@ -674,6 +728,9 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "header_checks": header_checks,
             "reference_heading_found_at": ref_start,
             "duplicate_reference_numbers": duplicate_reference_numbers,
+            "reference_word_wrap_hits": reference_word_wrap_hits,
+            "reference_hard_break_hits": reference_hard_break_hits,
+            "reference_text_run_count_violations": reference_text_run_count_violations,
             "front_empty_breaks": front_empty_breaks,
             "forbidden_field_code_hits": forbidden_field_code_hits,
             "latin_font_violations": latin_font_violations,
@@ -681,6 +738,8 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "forbidden_math_font_hits": forbidden_math_font_hits,
             "math_font_violations": math_font_violations,
             "math_upright_text_font_violations": math_upright_text_font_violations,
+            "math_operator_font_violations": math_operator_font_violations,
+            "spaced_math_operator_runs": spaced_math_operator_runs,
             "math_run_font_counts": math_run_font_counts,
             "math_count": math_count,
             "math_subscript_count": subscript_count,

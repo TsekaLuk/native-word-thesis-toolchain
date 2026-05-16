@@ -20,7 +20,9 @@ NS = {"w": W, "r": R, "m": M}
 MATH_ENGINE_FONT = "STIX Two Math"
 MATH_SYMBOL_FONT = "STIX Two Math"
 MATH_TEXT_FONT = "Times New Roman"
+MATH_OPERATOR_FONT = "Times New Roman"
 MATH_UPRIGHT_TEXT_RE = re.compile(r"[A-Za-z]{2,}|@")
+MATH_OPERATOR_TEXT_RE = re.compile(r"^[\s=+\-−×÷*/≤≥<>:|,;(){}\[\]∈∩∪]+$")
 
 
 def qname(ns: str, tag: str) -> str:
@@ -116,13 +118,11 @@ def set_reference_paragraph(p: etree._Element) -> None:
     ind.set(qname(W, "left"), "720")
     ind.set(qname(W, "hanging"), "420")
     set_spacing(p)
-    # Bibliographies often contain DOI/URL and long English titles. Allow
-    # Latin strings to wrap inside the reference block, but suppress automatic
-    # hyphen insertion such as "sys-" / "tems".
+    # Keep DOI/URL and English titles as continuous strings. Do not enable
+    # Latin wordWrap; it lets WPS break English words and fields mid-token.
     word_wrap = p_pr.find("w:wordWrap", namespaces=NS)
-    if word_wrap is None:
-        word_wrap = etree.SubElement(p_pr, qname(W, "wordWrap"))
-    word_wrap.set(qname(W, "val"), "1")
+    if word_wrap is not None:
+        p_pr.remove(word_wrap)
     suppress_hyphen = p_pr.find("w:suppressAutoHyphens", namespaces=NS)
     if suppress_hyphen is None:
         suppress_hyphen = etree.SubElement(p_pr, qname(W, "suppressAutoHyphens"))
@@ -131,20 +131,10 @@ def set_reference_paragraph(p: etree._Element) -> None:
 
 def replace_paragraph_text(p: etree._Element, text: str) -> None:
     runs = p.xpath("./w:r", namespaces=NS)
-    if not runs:
-        p.append(make_text_run(text))
-        return
-    written = False
+    style_from = deepcopy(runs[0].find("w:rPr", namespaces=NS)) if runs and runs[0].find("w:rPr", namespaces=NS) is not None else None
     for run in runs:
-        texts = run.xpath("./w:t", namespaces=NS)
-        if texts and not written:
-            texts[0].text = text
-            for extra in texts[1:]:
-                extra.text = ""
-            written = True
-        else:
-            for t in texts:
-                t.text = ""
+        p.remove(run)
+    p.append(make_text_run(text, style_from))
 
 
 def rewrite_paragraph_inline_math(p: etree._Element, parts: list[tuple[str, str | list[Any]]]) -> None:
@@ -215,6 +205,10 @@ def is_upright_math_text(text: str) -> bool:
     return bool(MATH_UPRIGHT_TEXT_RE.search(text))
 
 
+def is_operator_math_text(text: str) -> bool:
+    return bool(MATH_OPERATOR_TEXT_RE.fullmatch(text)) and any(not ch.isspace() for ch in text)
+
+
 def make_math_word_rpr(font: str = MATH_SYMBOL_FONT, size_half_points: str = "21") -> etree._Element:
     r_pr = etree.Element(qname(W, "rPr"))
     fonts = etree.SubElement(r_pr, qname(W, "rFonts"))
@@ -226,6 +220,9 @@ def make_math_word_rpr(font: str = MATH_SYMBOL_FONT, size_half_points: str = "21
 
 
 def make_math_run(text: str, font: str = MATH_SYMBOL_FONT) -> etree._Element:
+    if is_operator_math_text(text):
+        text = "".join(str(text).split())
+        font = MATH_OPERATOR_FONT
     r = m_el("r")
     r.append(make_math_word_rpr(font))
     t = m_el("t", text)

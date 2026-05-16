@@ -84,7 +84,10 @@
   "references": {
     "headings_compact": ["参考文献"],
     "stop_heading_prefixes": ["附录", "Appendix"],
-    "forbid_decimal_plus_bracket_numbering": true
+    "forbid_decimal_plus_bracket_numbering": true,
+    "forbid_word_wrap": true,
+    "forbid_hard_line_breaks": true,
+    "max_text_runs_per_entry": 1
   },
   "front_matter": {
     "scan_first_paragraphs": 90,
@@ -112,6 +115,8 @@
     "required_math_font": "STIX Two Math",
     "allowed_math_run_fonts": ["STIX Two Math", "Times New Roman"],
     "upright_text_math_font": "Times New Roman",
+    "operator_math_font": "Times New Roman",
+    "forbid_spaced_operator_runs": true,
     "forbidden_math_fonts": ["Cambria Math"],
     "require_direct_math_run_font": true,
     "required_formula_fragments": [
@@ -132,6 +137,8 @@
         "name": "F1 fraction",
         "anchor": "F1=",
         "must_contain_counts": {
+          "=": 1,
+          "+": 1,
           "Precision": 2,
           "Recall": 2
         },

@@ -36,8 +36,13 @@ def test_polish_removes_common_conversion_artifacts() -> None:
     assert report["uncentered_exact_texts"] == []
     assert report["cover_table_count"] == 1
     refs = [p for p in document_root.xpath("//w:body/w:p", namespaces=NS) if node_text(p).startswith("[1]")]
-    assert refs and refs[0].xpath("./w:pPr/w:wordWrap[@w:val='1']", namespaces=NS)
+    assert refs and not refs[0].xpath("./w:pPr/w:wordWrap", namespaces=NS)
     assert refs[0].xpath("./w:pPr/w:suppressAutoHyphens[@w:val='1']", namespaces=NS)
+    ref_text_runs = [
+        "".join(run.xpath("./w:t/text()", namespaces=NS))
+        for run in refs[0].xpath(".//w:r[not(ancestor::m:oMath)]", namespaces=NS)
+    ]
+    assert len([item for item in ref_text_runs if item]) == 1
     dates = [p for p in document_root.xpath("//w:body/w:p", namespaces=NS) if node_text(p) == "2026年6月"]
     assert dates and dates[0].xpath("./w:pPr/w:jc[@w:val='center']", namespaces=NS)
 
@@ -52,12 +57,14 @@ def test_omml_builder_supports_display_formula_shapes() -> None:
         ]
     )
 
-    assert node_text(formula) == "CTR = 110o∈Top10rel(v,o)"
+    assert node_text(formula) == "CTR=110o∈Top10rel(v,o)"
     assert len(formula.xpath(".//m:f", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:nary", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:rad", namespaces=NS)) == 1
     assert formula.xpath('.//m:r[m:rPr/m:nor]/w:rPr/w:rFonts[@w:ascii="Times New Roman"]', namespaces=NS)
     assert formula.xpath('.//m:r[not(m:rPr/m:nor)]/w:rPr/w:rFonts[@w:ascii="STIX Two Math"]', namespaces=NS)
+    assert formula.xpath('.//m:r[m:t="="]/w:rPr/w:rFonts[@w:ascii="Times New Roman"]', namespaces=NS)
+    assert not formula.xpath('.//m:r[m:t=" = "]', namespaces=NS)
 
 
 def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
@@ -113,6 +120,8 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
                         "required_math_font": "STIX Two Math",
                         "allowed_math_run_fonts": ["STIX Two Math", "Times New Roman"],
                         "upright_text_math_font": "Times New Roman",
+                        "operator_math_font": "Times New Roman",
+                        "forbid_spaced_operator_runs": True,
                         "forbidden_math_fonts": ["Cambria Math"],
                         "require_direct_math_run_font": True,
                     },
