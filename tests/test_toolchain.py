@@ -56,7 +56,7 @@ def test_omml_builder_supports_display_formula_shapes() -> None:
     assert len(formula.xpath(".//m:f", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:nary", namespaces=NS)) == 1
     assert len(formula.xpath(".//m:rad", namespaces=NS)) == 1
-    assert formula.xpath('.//m:r[m:rPr/m:nor]/w:rPr/w:rFonts[@w:ascii="Cambria Math"]', namespaces=NS)
+    assert formula.xpath('.//m:r[m:rPr/m:nor]/w:rPr/w:rFonts[@w:ascii="Times New Roman"]', namespaces=NS)
     assert formula.xpath('.//m:r[not(m:rPr/m:nor)]/w:rPr/w:rFonts[@w:ascii="STIX Two Math"]', namespaces=NS)
 
 
@@ -110,9 +110,10 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
                     },
                     "math": {
                         "forbid_simple_numeric_omml": True,
-                        "required_math_font": "Cambria Math",
-                        "allowed_math_run_fonts": ["Cambria Math", "STIX Two Math"],
-                        "upright_text_math_font": "Cambria Math",
+                        "required_math_font": "STIX Two Math",
+                        "allowed_math_run_fonts": ["STIX Two Math", "Times New Roman"],
+                        "upright_text_math_font": "Times New Roman",
+                        "forbidden_math_fonts": ["Cambria Math"],
                         "require_direct_math_run_font": True,
                     },
                 },

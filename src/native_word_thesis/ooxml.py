@@ -17,9 +17,9 @@ M = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 NS = {"w": W, "r": R, "m": M}
-MATH_ENGINE_FONT = "Cambria Math"
+MATH_ENGINE_FONT = "STIX Two Math"
 MATH_SYMBOL_FONT = "STIX Two Math"
-MATH_TEXT_FONT = "Cambria Math"
+MATH_TEXT_FONT = "Times New Roman"
 MATH_UPRIGHT_TEXT_RE = re.compile(r"[A-Za-z]{2,}|@")
 
 

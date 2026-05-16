@@ -85,6 +85,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "required_math_font": None,
         "allowed_math_run_fonts": [],
         "upright_text_math_font": None,
+        "forbidden_math_fonts": [],
         "require_direct_math_run_font": False,
         "required_formula_fragments": [],
     },
@@ -548,6 +549,7 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
         settings_root = etree.parse(str(settings_path)).getroot()
     configured_math_fonts = settings_root.xpath(".//m:mathFont/@m:val", namespaces=NS) if settings_root is not None else []
     required_math_font = math_cfg.get("required_math_font")
+    forbidden_math_fonts = set(math_cfg.get("forbidden_math_fonts") or [])
     if required_math_font and required_math_font not in configured_math_fonts:
         warnings.append(
             {
@@ -556,6 +558,12 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                 "actual": configured_math_fonts,
             }
         )
+    forbidden_math_font_hits: list[dict[str, Any]] = []
+    for font in configured_math_fonts:
+        if font in forbidden_math_fonts:
+            item = {"location": "settings.xml", "font": font}
+            forbidden_math_font_hits.append(item)
+            warnings.append({"code": "forbidden_math_font", **item})
     allowed_math_run_fonts = set(math_cfg.get("allowed_math_run_fonts") or [])
     if not allowed_math_run_fonts and required_math_font:
         allowed_math_run_fonts = {required_math_font}
@@ -582,6 +590,11 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             if item["ascii"]:
                 math_run_font_counts[item["ascii"]] = math_run_font_counts.get(item["ascii"], 0) + 1
             actual_fonts = {item[key] for key in ["ascii", "hAnsi", "eastAsia", "cs"]}
+            for font in sorted(actual_fonts):
+                if font in forbidden_math_fonts:
+                    hit = {"location": "math_run", "font": font, "text": text[:80]}
+                    forbidden_math_font_hits.append(hit)
+                    warnings.append({"code": "forbidden_math_font", **hit})
             if allowed_math_run_fonts and (None in actual_fonts or not actual_fonts.issubset(allowed_math_run_fonts)):
                 math_font_violations.append(item)
                 warnings.append({"code": "math_run_font_mismatch", "expected": sorted(allowed_math_run_fonts), **item})
@@ -623,6 +636,8 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                 "m:nary": spec.get("min_nary_count"),
                 "m:rad": spec.get("min_radical_count"),
                 "m:sSub": spec.get("min_subscript_count"),
+                "m:sSup": spec.get("min_superscript_count"),
+                "m:sSubSup": spec.get("min_subsup_count"),
             }.items():
                 if min_count is None:
                     continue
@@ -663,6 +678,7 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "forbidden_field_code_hits": forbidden_field_code_hits,
             "latin_font_violations": latin_font_violations,
             "configured_math_fonts": configured_math_fonts,
+            "forbidden_math_font_hits": forbidden_math_font_hits,
             "math_font_violations": math_font_violations,
             "math_upright_text_font_violations": math_upright_text_font_violations,
             "math_run_font_counts": math_run_font_counts,

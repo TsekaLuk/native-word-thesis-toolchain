@@ -109,11 +109,25 @@
     "min_omml_count": 50,
     "min_subscript_count": 30,
     "forbid_simple_numeric_omml": true,
-    "required_math_font": "Cambria Math",
-    "allowed_math_run_fonts": ["Cambria Math", "STIX Two Math"],
-    "upright_text_math_font": "Cambria Math",
+    "required_math_font": "STIX Two Math",
+    "allowed_math_run_fonts": ["STIX Two Math", "Times New Roman"],
+    "upright_text_math_font": "Times New Roman",
+    "forbidden_math_fonts": ["Cambria Math"],
     "require_direct_math_run_font": true,
     "required_formula_fragments": [
+      {
+        "name": "Distance decay",
+        "anchor": "Sdist=",
+        "must_contain_counts": {
+          "S": 1,
+          "dist": 1,
+          "e": 1,
+          "λ": 1,
+          "d": 2
+        },
+        "min_subscript_count": 1,
+        "min_superscript_count": 1
+      },
       {
         "name": "F1 fraction",
         "anchor": "F1=",
