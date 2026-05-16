@@ -78,7 +78,8 @@
     "bottom_border_size": "6",
     "bottom_border_space": "1",
     "require_nbsp_in_page_label": true,
-    "required_spacer_len": 32
+    "required_spacer_len": null,
+    "required_right_tab_pos": "8312"
   },
   "references": {
     "headings_compact": ["参考文献"],

@@ -59,6 +59,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "bottom_border_space": "1",
         "require_nbsp_in_page_label": False,
         "required_spacer_len": None,
+        "required_right_tab_pos": None,
     },
     "references": {
         "headings_compact": ["参考文献"],
@@ -423,6 +424,10 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                 "has_bottom_border": bool(p.xpath('./w:pPr/w:pBdr/w:bottom[@w:val="single"]', namespaces=NS)),
                 "has_nbsp": "\u00a0" in text,
                 "spacer_len": max([len(m.group(1)) for m in re.finditer(r"( +)", text)] or [0]),
+                "right_tab_positions": [
+                    tab.get(qn("w:pos"))
+                    for tab in p.xpath('./w:pPr/w:tabs/w:tab[@w:val="right"]', namespaces=NS)
+                ],
             }
             header_checks.append(check)
             if header_cfg.get("require_zero_indent", True) and any(check["ind"].get(key) not in {None, "0"} for key in ["left", "right", "firstLine", "hanging"]):
@@ -440,6 +445,9 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             required_spacer = header_cfg.get("required_spacer_len")
             if required_spacer is not None and check["spacer_len"] != int(required_spacer):
                 warnings.append({"code": "header_spacer_len_mismatch", "expected": required_spacer, **check})
+            required_right_tab = header_cfg.get("required_right_tab_pos")
+            if required_right_tab is not None and str(required_right_tab) not in check["right_tab_positions"]:
+                warnings.append({"code": "header_right_tab_missing", "expected": str(required_right_tab), **check})
 
     references_cfg = cfg.get("references", {})
     ref_start: int | None = None
