@@ -12,3 +12,5 @@ out/
 *.pdf
 *.png
 !examples/*.yaml
+!assets/
+!assets/*.png
