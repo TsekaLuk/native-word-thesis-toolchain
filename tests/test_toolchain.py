@@ -82,6 +82,9 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
         leaked = doc.add_paragraph("converted table/body residue")
         leaked.style = compact_style
         doc.add_paragraph('图 3.2 系统功能模块结构图 TC "图 3.2 系统功能模块结构图" \\f F \\l 1')
+        bare_citation = doc.add_paragraph("引用缺少方括号")
+        bare_run = bare_citation.add_run("12")
+        bare_run.font.superscript = True
         latin = doc.add_paragraph().add_run("ASP.NET Core")
         latin.font.name = "Arial"
         math_para = doc.add_paragraph()
@@ -112,6 +115,10 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
                     "require_caption_zero_indent": False,
                     "require_drawing_center": False,
                     "require_drawing_zero_indent": False,
+                    "citations": {
+                        "require_superscript_brackets": True,
+                        "scan_before_reference_heading": False,
+                    },
                     "field_codes": {
                         "forbid_instr_text_patterns": [r"\bTC\b", r"TOC\s+\\h\s+\\z\s+\\f"],
                         "forbid_visible_text_patterns": [r"\bTC\s+\"", r"\\f\s+[FT]\b", r"\\l\s+1\b"],
@@ -154,6 +161,7 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
     report = json.loads(result.stdout)
     codes = {warning["code"] for warning in report["warnings"]}
     assert "forbidden_field_code_text" in codes
+    assert "citation_superscript_missing_brackets" in codes
     assert "latin_font_mismatch" in codes
     assert "conversion_style_residue" in codes
     assert "math_run_font_missing" in codes

@@ -29,6 +29,7 @@ WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 NS = {"w": W, "m": M, "wp": WP}
 EMU_PER_INCH = 914400
 MATH_OPERATOR_TEXT_RE = re.compile(r"^[\s=+\-−×÷*/≤≥<>:|,;(){}\[\]∈∩∪]+$")
+CITATION_SUPERSCRIPT_RE = re.compile(r"^\[?[\d\s,，;；\-–—]+]?$")
 
 
 DEFAULT_CONFIG: dict[str, Any] = {
@@ -74,6 +75,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "forbid_word_wrap": False,
         "forbid_hard_line_breaks": False,
         "max_text_runs_per_entry": None,
+    },
+    "citations": {
+        "require_superscript_brackets": True,
+        "scan_before_reference_heading": True,
+        "reference_headings_compact": ["参考文献"],
     },
     "front_matter": {
         "scan_first_paragraphs": 90,
@@ -184,6 +190,28 @@ def set_paragraph_style(p: etree._Element, sid: str) -> None:
         p_style = etree.Element(f"{{{W}}}pStyle")
         p_pr.insert(0, p_style)
     p_style.set(qn("w:val"), sid)
+
+
+def superscript_groups(p: etree._Element) -> list[str]:
+    groups: list[str] = []
+    current: list[str] = []
+    for run in p.xpath("./w:r", namespaces=NS):
+        text = "".join(run.xpath(".//w:t/text()", namespaces=NS))
+        vert = run.find("./w:rPr/w:vertAlign", namespaces=NS)
+        is_superscript = vert is not None and vert.get(qn("w:val")) == "superscript"
+        if is_superscript:
+            current.append(text)
+        elif current:
+            groups.append("".join(current))
+            current = []
+    if current:
+        groups.append("".join(current))
+    return groups
+
+
+def is_citation_like_superscript(text: str) -> bool:
+    stripped = text.strip()
+    return bool(stripped and any(ch.isdigit() for ch in stripped) and CITATION_SUPERSCRIPT_RE.fullmatch(stripped))
 
 
 def jc_val(p: etree._Element) -> str | None:
@@ -365,6 +393,32 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                         fixes.append("cleared Caption style toggles")
                     else:
                         warnings.append({"code": "caption_style_toggle_noise"})
+
+    citations_cfg = cfg.get("citations", {})
+    citation_superscript_violations: list[dict[str, Any]] = []
+    ref_heading_compact = set(citations_cfg.get("reference_headings_compact", ["参考文献"]))
+    citation_scan_stop = len(paragraphs)
+    if citations_cfg.get("scan_before_reference_heading", True):
+        for idx, p in enumerate(paragraphs):
+            if compact_text(paragraph_text(p)) in ref_heading_compact:
+                citation_scan_stop = idx
+                break
+    if citations_cfg.get("require_superscript_brackets", True):
+        for idx, p in enumerate(paragraphs[:citation_scan_stop]):
+            para_text = paragraph_text(p)
+            for superscript in superscript_groups(p):
+                stripped = superscript.strip()
+                if not is_citation_like_superscript(stripped):
+                    continue
+                if stripped.startswith("[") and stripped.endswith("]"):
+                    continue
+                violation = {
+                    "paragraph": idx,
+                    "superscript": stripped,
+                    "text": para_text[:120],
+                }
+                citation_superscript_violations.append(violation)
+                warnings.append({"code": "citation_superscript_missing_brackets", **violation})
 
     style_gallery_cfg = cfg.get("style_gallery", {})
     style_gallery_checks: list[dict[str, Any]] = []
@@ -768,6 +822,7 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "heading_counts": heading_counts,
             "heading_effective_toggles": heading_effective_toggles,
             "heading_toggle_noise": heading_toggle_noise,
+            "citation_superscript_violations": citation_superscript_violations,
             "style_gallery_checks": style_gallery_checks,
             "conversion_style_hits": conversion_style_hits,
             "caption_count": caption_count,

@@ -51,6 +51,7 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
 ## What To Fix First
 
 - References: remove automatic list numbering before adding `[n]`.
+- In-text citations:正文引文上标必须带方括号。 Do not emit a bare superscript number such as `12`; emit `[12]`, `[3,5]`, or `[21-22]` as the superscript group. Add an OOXML guard for `w:vertAlign=w:superscript` citation-like runs so missing brackets fail before handoff.
 - References: keep each entry as one continuous paragraph/run. Do not enable `w:wordWrap` to satisfy field completeness; it can make WPS split English titles, DOI/URL fields, or journal metadata in strange places. Suppress auto-hyphenation, forbid hard line breaks inside entries, and guard that generated reference entries remain continuous.
 - Captions: center them and use `keepNext` for table captions.
 - Tables: center tables, add three-line borders when appropriate, and disable row splitting.
