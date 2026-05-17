@@ -207,3 +207,205 @@ def test_intake_blocks_uncontrolled_pdf_only_flow() -> None:
     assert report["source_ready"]
     assert not report["governance_ready"]
     assert any("模板" in warning for warning in report["warnings"])
+
+
+def test_strict_intake_requires_all_handoff_inputs() -> None:
+    with tempfile.TemporaryDirectory(prefix="nwt-intake-strict-") as td:
+        root = Path(td)
+        thesis = root / "thesis"
+        thesis.mkdir()
+        (thesis / "main.tex").write_text(r"\documentclass{ctexart}\begin{document}测试\end{document}", encoding="utf-8")
+        (thesis / "refs.bib").write_text("@article{x,title={x}}\n", encoding="utf-8")
+
+        report = audit_project(root, strict=True)
+
+    assert not report["ok"]
+    assert report["strict"] is True
+    assert report["risk_level"] == "blocked"
+    assert report["risk_score"] < 70
+    assert report["recommended_commands"][0] == "nwt intake . --strict --json build/intake-report.json"
+    blocker_codes = {item["code"] for item in report["blockers"]}
+    assert blocker_codes == {"missing_template_docx", "missing_handbook", "missing_reference_docx", "missing_figure_assets"}
+
+
+def test_ooxml_guard_catches_unassociated_tables() -> None:
+    with tempfile.TemporaryDirectory(prefix="nwt-structure-guard-") as td:
+        root = Path(td)
+        docx = root / "artifact.docx"
+        cfg = root / "guard.json"
+
+        from docx import Document
+
+        doc = Document()
+        doc.add_paragraph("没有表题的表格如下：")
+        table = doc.add_table(rows=1, cols=2)
+        table.cell(0, 0).text = "A"
+        table.cell(0, 1).text = "B"
+        doc.save(docx)
+
+        cfg.write_text(
+            json.dumps(
+                {
+                    "heading_styles": [],
+                    "forbid_heading4": False,
+                    "caption_pattern": r"^(图|表)\s*\d+[-.]\d+\s+",
+                    "require_caption_center": False,
+                    "require_caption_zero_indent": False,
+                    "require_drawing_center": False,
+                    "require_drawing_zero_indent": False,
+                    "structure": {
+                        "require_table_caption_before_table": True,
+                        "require_figure_caption_after_drawing": True,
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parents[1] / "scripts/ooxml_thesis_guard.py"),
+                str(docx),
+                "--config",
+                str(cfg),
+                "--fail-on-warnings",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    codes = {warning["code"] for warning in report["warnings"]}
+    assert "table_without_adjacent_caption" in codes
+
+
+def test_ooxml_guard_catches_table_alignment_and_floating_drawings() -> None:
+    with tempfile.TemporaryDirectory(prefix="nwt-layout-guard-") as td:
+        root = Path(td)
+        docx = root / "artifact.docx"
+        modified = root / "artifact-floating.docx"
+        cfg = root / "guard.json"
+
+        from docx import Document
+
+        doc = Document()
+        doc.add_paragraph("表 1-1 示例表")
+        table = doc.add_table(rows=1, cols=1)
+        table.cell(0, 0).text = "A"
+        drawing_para = doc.add_paragraph()
+        drawing_para._p.append(etree.fromstring(f"""
+        <w:r xmlns:w="{NS['w']}" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+          <w:drawing>
+            <wp:anchor>
+              <wp:extent cx="914400" cy="914400"/>
+            </wp:anchor>
+          </w:drawing>
+        </w:r>
+        """))
+        doc.add_paragraph("图 1-1 示例图")
+        doc.save(docx)
+
+        # python-docx preserves the synthetic anchor in the package. Keep a
+        # separate path to make the test intent obvious.
+        docx.replace(modified)
+
+        cfg.write_text(
+            json.dumps(
+                {
+                    "heading_styles": [],
+                    "forbid_heading4": False,
+                    "caption_pattern": r"^(图|表)\s*\d+[-.]\d+\s+",
+                    "require_caption_center": False,
+                    "require_caption_zero_indent": False,
+                    "require_drawing_center": False,
+                    "require_drawing_zero_indent": False,
+                    "structure": {
+                        "require_table_caption_before_table": True,
+                        "require_table_center": True,
+                        "forbid_floating_drawings": True,
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parents[1] / "scripts/ooxml_thesis_guard.py"),
+                str(modified),
+                "--config",
+                str(cfg),
+                "--fail-on-warnings",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    assert result.returncode == 1
+    report = json.loads(result.stdout)
+    codes = {warning["code"] for warning in report["warnings"]}
+    assert "table_not_centered" in codes
+    assert "floating_drawing_anchor" in codes
+
+
+def test_ooxml_guard_scopes_body_table_caption_checks() -> None:
+    with tempfile.TemporaryDirectory(prefix="nwt-scoped-guard-") as td:
+        root = Path(td)
+        docx = root / "artifact.docx"
+        cfg = root / "guard.json"
+
+        from docx import Document
+
+        doc = Document()
+        cover = doc.add_table(rows=1, cols=1)
+        cover.cell(0, 0).text = "封面模板表格"
+        doc.add_paragraph("1 绪论")
+        doc.add_paragraph("表 1-1 正文表格")
+        body_table = doc.add_table(rows=1, cols=1)
+        body_table.cell(0, 0).text = "A"
+        doc.save(docx)
+
+        cfg.write_text(
+            json.dumps(
+                {
+                    "heading_styles": [],
+                    "forbid_heading4": False,
+                    "caption_pattern": r"^(图|表)\s*\d+[-.]\d+\s+",
+                    "require_caption_center": False,
+                    "require_caption_zero_indent": False,
+                    "require_drawing_center": False,
+                    "require_drawing_zero_indent": False,
+                    "structure": {
+                        "scope_start_paragraph_pattern": r"^1\s+",
+                        "require_table_caption_before_table": True,
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(Path(__file__).parents[1] / "scripts/ooxml_thesis_guard.py"),
+                str(docx),
+                "--config",
+                str(cfg),
+                "--fail-on-warnings",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    report = json.loads(result.stdout)
+    codes = {warning["code"] for warning in report["warnings"]}
+    assert "table_without_adjacent_caption" not in codes

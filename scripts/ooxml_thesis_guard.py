@@ -57,6 +57,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "require_drawing_zero_indent": True,
     "drawing_max_width_in": None,
     "drawing_max_height_in": None,
+    "structure": {
+        "scope_start_paragraph_pattern": None,
+        "require_table_caption_before_table": False,
+        "require_figure_caption_after_drawing": False,
+        "require_table_center": False,
+        "forbid_floating_drawings": False,
+    },
     "header": {
         "required_text_contains": "",
         "require_zero_indent": True,
@@ -306,6 +313,10 @@ def paragraph_has_drawing(p: etree._Element) -> bool:
     return bool(p.xpath(".//wp:inline|.//wp:anchor", namespaces=NS))
 
 
+def paragraph_has_floating_drawing(p: etree._Element) -> bool:
+    return bool(p.xpath(".//wp:anchor", namespaces=NS))
+
+
 def paragraph_max_drawing_inches(p: etree._Element) -> tuple[float, float]:
     max_w = 0.0
     max_h = 0.0
@@ -313,6 +324,44 @@ def paragraph_max_drawing_inches(p: etree._Element) -> tuple[float, float]:
         max_w = max(max_w, int(ext.get("cx", "0")) / EMU_PER_INCH)
         max_h = max(max_h, int(ext.get("cy", "0")) / EMU_PER_INCH)
     return max_w, max_h
+
+
+def caption_kind(text: str, caption_re: re.Pattern[str]) -> str | None:
+    match = caption_re.match(text.strip())
+    return match.group(1) if match else None
+
+
+def nearby_paragraph(children: list[etree._Element], index: int, direction: int) -> etree._Element | None:
+    cursor = index + direction
+    while 0 <= cursor < len(children):
+        node = children[cursor]
+        if node.tag == qn("w:p") and (paragraph_text(node).strip() or paragraph_has_drawing(node)):
+            return node
+        if node.tag == qn("w:tbl"):
+            return None
+        cursor += direction
+    return None
+
+
+def table_jc_val(tbl: etree._Element) -> str | None:
+    node = tbl.find("./w:tblPr/w:jc", namespaces=NS)
+    return node.get(qn("w:val")) if node is not None else None
+
+
+def ensure_table_center(tbl: etree._Element) -> None:
+    tbl_pr = get_or_add(tbl, "tblPr")
+    jc = get_or_add(tbl_pr, "jc")
+    jc.set(qn("w:val"), "center")
+
+
+def structure_scope_start(children: list[etree._Element], pattern: str | None) -> int:
+    if not pattern:
+        return 0
+    compiled = re.compile(pattern)
+    for idx, child in enumerate(children):
+        if child.tag == qn("w:p") and compiled.search(paragraph_text(child).strip()):
+            return idx
+    return 0
 
 
 def ensure_header_bottom_border(p: etree._Element, cfg: dict[str, Any]) -> None:
@@ -339,6 +388,7 @@ def iter_docx_xml(root_dir: Path) -> tuple[etree._ElementTree, etree._Element, e
 def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> dict[str, Any]:
     document_tree, body, styles_tree, styles_root, headers = iter_docx_xml(root_dir)
     paragraphs = body.xpath("./w:p", namespaces=NS)
+    body_children = list(body)
     warnings: list[dict[str, Any]] = []
     fixes: list[str] = []
 
@@ -491,7 +541,7 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
         text = paragraph_text(p)
         if cfg.get("exclude_list_entries_with_tabs", True) and "\t" in text:
             continue
-        if not caption_re.match(text.strip()):
+        if not caption_kind(text, caption_re):
             continue
         caption_count += 1
         bad_align = cfg.get("require_caption_center", True) and jc_val(p) != "center"
@@ -504,6 +554,71 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
                 if cfg.get("require_caption_zero_indent", True):
                     ensure_zero_indent(p)
                 fixes.append(f"normalized caption paragraph {idx}")
+
+    structure_cfg = cfg.get("structure", {})
+    structure_start = structure_scope_start(body_children, structure_cfg.get("scope_start_paragraph_pattern"))
+    table_caption_link_violations: list[dict[str, Any]] = []
+    drawing_caption_link_violations: list[dict[str, Any]] = []
+    table_alignment_violations: list[dict[str, Any]] = []
+    floating_drawing_violations: list[dict[str, Any]] = []
+    table_index_by_child: dict[int, int] = {}
+    table_index = 0
+    for idx, child in enumerate(body_children):
+        if child.tag == qn("w:tbl"):
+            table_index += 1
+            table_index_by_child[idx] = table_index
+    if structure_cfg.get("require_table_caption_before_table", False):
+        for idx, child in enumerate(body_children):
+            if idx < structure_start:
+                continue
+            if child.tag != qn("w:tbl"):
+                continue
+            previous = nearby_paragraph(body_children, idx, -1)
+            previous_text = paragraph_text(previous) if previous is not None else ""
+            if caption_kind(previous_text, caption_re) != "表":
+                item = {"table_index": table_index_by_child.get(idx, 0), "previous_text": previous_text[:160]}
+                table_caption_link_violations.append(item)
+                warnings.append({"code": "table_without_adjacent_caption", **item})
+    if structure_cfg.get("require_table_center", False):
+        for idx, child in enumerate(body_children):
+            if idx < structure_start:
+                continue
+            if child.tag != qn("w:tbl"):
+                continue
+            jc = table_jc_val(child)
+            if jc != "center":
+                item = {"table_index": table_index_by_child.get(idx, 0), "jc": jc}
+                table_alignment_violations.append(item)
+                warnings.append({"code": "table_not_centered", **item})
+                if fix:
+                    ensure_table_center(child)
+                    fixes.append(f"centered table {table_index_by_child.get(idx, 0)}")
+    if structure_cfg.get("require_figure_caption_after_drawing", False):
+        drawing_index = 0
+        for idx, child in enumerate(body_children):
+            if idx < structure_start:
+                continue
+            if child.tag != qn("w:p") or not paragraph_has_drawing(child):
+                continue
+            drawing_index += 1
+            following = nearby_paragraph(body_children, idx, 1)
+            following_text = paragraph_text(following) if following is not None else ""
+            if caption_kind(following_text, caption_re) != "图":
+                item = {"drawing_index": drawing_index, "following_text": following_text[:160]}
+                drawing_caption_link_violations.append(item)
+                warnings.append({"code": "drawing_without_adjacent_caption", **item})
+    if structure_cfg.get("forbid_floating_drawings", False):
+        drawing_index = 0
+        for idx, child in enumerate(body_children):
+            if idx < structure_start:
+                continue
+            if child.tag != qn("w:p") or not paragraph_has_drawing(child):
+                continue
+            drawing_index += 1
+            if paragraph_has_floating_drawing(child):
+                item = {"drawing_index": drawing_index, "paragraph_text": paragraph_text(child)[:160]}
+                floating_drawing_violations.append(item)
+                warnings.append({"code": "floating_drawing_anchor", **item})
 
     drawing_count = 0
     max_drawing_width = 0.0
@@ -826,6 +941,11 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "style_gallery_checks": style_gallery_checks,
             "conversion_style_hits": conversion_style_hits,
             "caption_count": caption_count,
+            "structure_scope_start_child": structure_start,
+            "table_caption_link_violations": table_caption_link_violations,
+            "drawing_caption_link_violations": drawing_caption_link_violations,
+            "table_alignment_violations": table_alignment_violations,
+            "floating_drawing_violations": floating_drawing_violations,
             "drawing_count": drawing_count,
             "max_drawing_inches": [round(max_drawing_width, 3), round(max_drawing_height, 3)],
             "header_checks": header_checks,

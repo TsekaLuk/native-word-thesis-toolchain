@@ -11,9 +11,9 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
 
 1. Run intake on the new thesis folder before touching Word layout. This prevents repeating missing-template/PDF-only/manual-fix loops:
    ```bash
-   nwt intake /path/to/thesis-project --json build/intake-report.json
+   nwt intake /path/to/thesis-project --strict --json build/intake-report.json
    ```
-   Confirm the report has source input plus at least one authoritative formatting input: school handbook/template or accepted reference thesis.
+   Confirm the report has source input, bibliography, figure assets, and authoritative formatting inputs: school handbook, school template, and accepted reference thesis. Treat `risk_level=blocked` or non-empty `blockers` as a hard stop for pixel-level Word delivery.
 2. Locate source artifacts: LaTeX/PDF, generated draft DOCX, school handbook/template, accepted reference thesis, figures, bibliography, and any generated reports.
 3. Prefer LaTeX/Pandoc draft generation over PDF-to-Word:
    ```bash
@@ -48,7 +48,7 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
 
 ## Reusable Toolchain
 
-- `nwt intake`: new-thesis input audit. It finds likely LaTeX entry files, compiled PDFs, draft DOCX files, bibliography, figure assets, school templates/handbooks, and accepted reference DOCX files, then emits a JSON report and recommended next commands. Use it before any one-off conversion or manual Word repair.
+- `nwt intake --strict`: new-thesis input audit. It finds likely LaTeX entry files, compiled PDFs, draft DOCX files, bibliography, figure assets, school templates/handbooks, and accepted reference DOCX files, then emits `risk_score`, `risk_level`, `blockers`, and recommended next commands. Use it before any one-off conversion or manual Word repair.
 - `scripts/ooxml_thesis_guard.py`: template-aware OOXML audit and optional repair. It checks heading levels/toggle noise, native Chinese style-gallery names and visibility, residual conversion paragraph styles, caption and image centering without inherited indents, header bottom borders/spacers/NBSP page labels, duplicate reference numbering, front-matter empty break paragraphs, exposed field-code artifacts, Latin run fonts, drawing size ceilings, and OMML/subscript/simple-numeric math invariants.
 - `examples/jou-ooxml-guard.json`: JOU-style baseline config. Copy it per school or per customer; adjust the header text, spacer length, title/caption rules, figure size caps, and math thresholds instead of rewriting XPath.
 - Use `--json-out` as the handoff artifact. It gives stable metrics such as heading counts, caption count, drawing count, max drawing size, reference heading location, and math object counts, so future reviews can compare runs rather than relying on screenshots only.
@@ -61,6 +61,7 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
 - References: keep each entry as one continuous paragraph/run. Do not enable `w:wordWrap` to satisfy field completeness; it can make WPS split English titles, DOI/URL fields, or journal metadata in strange places. Suppress auto-hyphenation, forbid hard line breaks inside entries, and guard that generated reference entries remain continuous.
 - Captions: center them and use `keepNext` for table captions.
 - Tables: center tables, add three-line borders when appropriate, and disable row splitting.
+- Body structure: table captions must be directly before their tables; figure captions must directly follow their drawings; forbid floating `wp:anchor` drawings in delivery DOCX unless the school template explicitly requires a floating object.
 - Long appendix/API tables: do not globally force `cantSplit`; allow row splitting for tables that must span pages, and set fixed semantic column widths.
 - Math: use OMML for formulas and narrow symbolic table cells; repair collapsed Pandoc formulas by rebuilding fractions, roots, summation limits, and formula numbers as native OMML.
 - Math typography: do not treat font fallback as a fix. Verify the target editor's missing-font panel before choosing fonts. On WPS for macOS, `Cambria Math` may be unavailable and can be substituted with unrelated fonts such as `Tamil MN`, damaging equations. Use semantic font roles for generated OMML: set `settings.xml` `m:mathFont` and symbolic variable/operator runs to an installed math font such as `STIX Two Math`, and force formula-internal upright text (`m:nor`, long metric names such as `Precision`, `Recall`, `NDCG@10`, `Top10`) to `Times New Roman`. Guard both the allowed direct math-run font set and the stricter upright-text font rule, and explicitly forbid template fonts that WPS reports as missing.

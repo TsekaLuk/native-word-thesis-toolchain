@@ -107,13 +107,18 @@ def collect(files: list[Path], root: Path) -> dict[str, list[str]]:
     return {key: [rel(path, root) for path in value[:20]] for key, value in categories.items()}
 
 
-def audit_project(root: Path) -> dict[str, Any]:
+def make_blocker(code: str, message: str) -> dict[str, str]:
+    return {"code": code, "message": message}
+
+
+def audit_project(root: Path, strict: bool = False) -> dict[str, Any]:
     root = root.resolve()
     files = project_files(root)
     found = collect(files, root)
     source_ready = bool(found["latex_main"] or found["draft_docx"] or found["compiled_pdf"])
     governance_ready = bool(found["template_docx"] or found["handbook"] or found["reference_docx"])
     warnings: list[str] = []
+    blockers: list[dict[str, str]] = []
     if not found["latex_main"]:
         warnings.append("未发现 main/thesis/paper.tex；若只有 PDF 或 DOCX，需要先确认是否可回到 LaTeX/结构化源文件。")
     if not found["template_docx"]:
@@ -125,7 +130,35 @@ def audit_project(root: Path) -> dict[str, Any]:
     if not found["figure_assets"]:
         warnings.append("未发现集中图片/插图资产目录；image2/Py 图表字体治理可能需要先归档图片来源。")
 
-    commands = ["nwt intake . --json build/intake-report.json"]
+    if strict:
+        if not (found["latex_main"] or found["draft_docx"]):
+            blockers.append(make_blocker("missing_structured_source", "严格模式要求 LaTeX 主文件或可编辑 DOCX，PDF 只能作为诊断参照。"))
+        if not found["bibliography"]:
+            blockers.append(make_blocker("missing_bibliography", "严格模式要求参考文献源文件，避免 Word 端临时拼接参考文献。"))
+        if not found["template_docx"]:
+            blockers.append(make_blocker("missing_template_docx", "严格模式要求学校模板 DOCX，用于迁移封面、声明、授权书和样式库。"))
+        if not found["handbook"]:
+            blockers.append(make_blocker("missing_handbook", "严格模式要求毕业论文手册/规范，用于确认页边距、页眉、目录和题注参数。"))
+        if not found["reference_docx"]:
+            blockers.append(make_blocker("missing_reference_docx", "严格模式要求学长/定稿参考 DOCX，用于像素级视觉回归。"))
+        if not found["figure_assets"]:
+            blockers.append(make_blocker("missing_figure_assets", "严格模式要求集中图资产目录，用于图表字体、尺寸和题注关联治理。"))
+
+    risk_score = 100
+    risk_score -= 20 if not source_ready else 0
+    risk_score -= 15 if not found["bibliography"] else 0
+    risk_score -= 15 if not found["template_docx"] else 0
+    risk_score -= 15 if not found["handbook"] else 0
+    risk_score -= 15 if not found["reference_docx"] else 0
+    risk_score -= 10 if not found["figure_assets"] else 0
+    risk_score = max(0, risk_score)
+    risk_level = "ready"
+    if blockers or not source_ready or not governance_ready:
+        risk_level = "blocked"
+    elif warnings:
+        risk_level = "risky"
+
+    commands = [f"nwt intake .{' --strict' if strict else ''} --json build/intake-report.json"]
     if found["latex_main"]:
         tex = found["latex_main"][0]
         parent = Path(tex).parent.as_posix()
@@ -143,13 +176,20 @@ def audit_project(root: Path) -> dict[str, Any]:
             "nwt render-pages build/native.docx build/native-pages.pdf --engine pages",
         ]
     )
+    ok = source_ready and governance_ready
+    if strict:
+        ok = ok and not blockers
     return {
         "root": root.as_posix(),
         "file_count": len(files),
-        "ok": source_ready and governance_ready,
+        "ok": ok,
+        "strict": strict,
+        "risk_level": risk_level,
+        "risk_score": risk_score,
         "source_ready": source_ready,
         "governance_ready": governance_ready,
         "found": found,
+        "blockers": blockers,
         "warnings": warnings,
         "recommended_commands": commands,
     }

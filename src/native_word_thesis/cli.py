@@ -50,7 +50,7 @@ def cmd_draft_latex(args: argparse.Namespace) -> int:
 
 
 def cmd_intake(args: argparse.Namespace) -> int:
-    report = audit_project(args.project)
+    report = audit_project(args.project, strict=args.strict)
     print(dump_report(report, args.json))
     return 0 if report["ok"] or args.soft else 1
 
@@ -91,6 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
     intake = sub.add_parser("intake", help="Audit whether a new thesis project has the inputs needed for native Word conversion")
     intake.add_argument("project", type=Path)
     intake.add_argument("--json", type=Path)
+    intake.add_argument("--strict", action="store_true", help="Require all handoff-critical inputs before reporting ready")
     intake.add_argument("--soft", action="store_true", help="Always exit 0 while still printing the report")
     intake.set_defaults(func=cmd_intake)
 

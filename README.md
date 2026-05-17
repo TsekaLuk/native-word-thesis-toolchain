@@ -36,10 +36,10 @@
 
 ```bash
 python3 -m pip install -e .
-nwt intake /path/to/thesis-project --json build/intake-report.json
+nwt intake /path/to/thesis-project --strict --json build/intake-report.json
 ```
 
-`intake` 会先判断新论文是否具备结构化源文件、学校模板/手册、学长定稿、插图资产和参考文献。没有这些输入时，它会明确阻止“凭感觉修 Word”的低质量路径。
+`intake --strict` 会先判断新论文是否具备结构化源文件、参考文献、学校模板、手册、学长定稿和插图资产，并输出 `risk_score`、`risk_level`、`blockers`。没有这些输入时，它会明确阻止“凭感觉修 Word”的低质量路径。
 
 ## 标准流水线
 
@@ -80,6 +80,7 @@ nwt render-pages build/native.docx build/native-pages.pdf --engine pages
 
 - **公式原生性**：生成 OMML，检查分式、根号、求和、上下标、公式字体和纯数字伪公式。
 - **题注与图表**：图注/表注居中，清除首行缩进，表题 `keepNext`，表格居中并避免错误拆行。
+- **正文结构关联**：正文表格必须紧跟表题，正文图片必须紧跟图题，图片不能是浮动 `wp:anchor`。
 - **参考文献**：移除自动编号，避免双序号，保持条目连续，检查正文上标引用的 `[ ]`。
 - **页眉页码**：检查 section 继承、页眉灰色下边框、右侧页码宽度、单双位页码换行风险。
 - **样式库**：保留 Word 原生样式语义，同时把显示名、Heading 4、Pandoc 残留样式纳入 guard。
@@ -111,7 +112,7 @@ nwt install-skill
 ## 设计原则
 
 - PDF 转 Word 只作为诊断 fallback；正式交付优先走 LaTeX/Pandoc 草稿 + OOXML 后处理。
-- 能结构化检查的细节，不靠截图和主观描述。
+- 能结构化检查的细节，不靠截图和主观描述；推广新论文时必须先看 `risk_score` 和 `blockers`。
 - 公式必须是 OMML 或 Word 可编辑对象，不能把应编辑公式做成截图。
 - 模板资源不内置，按项目从学校手册、参考定稿、用户提供文件读取。
 - 封面、声明、授权书这类前置页不能只信样式编号；日期、签名、封面字段表等关键锚点要做显式结构检查。

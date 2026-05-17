@@ -70,6 +70,13 @@
   "require_drawing_zero_indent": true,
   "drawing_max_width_in": 6.1,
   "drawing_max_height_in": 6.5,
+  "structure": {
+    "scope_start_paragraph_pattern": "^1\\s+",
+    "require_table_caption_before_table": true,
+    "require_figure_caption_after_drawing": true,
+    "require_table_center": true,
+    "forbid_floating_drawings": true
+  },
   "header": {
     "required_text_contains": "江苏海洋大学",
     "require_zero_indent": true,
