@@ -10,6 +10,7 @@ from pathlib import Path
 from lxml import etree
 from scripts.quick_validate import CONFIG, make_fixture
 
+from native_word_thesis.intake import audit_project
 from native_word_thesis.ooxml import NS, make_omath, node_text, polish_docx
 from native_word_thesis.validate import validate_docx
 
@@ -167,3 +168,42 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
     assert "math_run_font_missing" in codes
     assert "math_upright_text_font_mismatch" in codes
     assert "simple_numeric_omml" in codes
+
+
+def test_intake_audits_new_thesis_inputs() -> None:
+    with tempfile.TemporaryDirectory(prefix="nwt-intake-test-") as td:
+        root = Path(td)
+        thesis = root / "thesis"
+        figures = thesis / "figures"
+        refs = root / "参考内容"
+        figures.mkdir(parents=True)
+        refs.mkdir()
+        (thesis / "main.tex").write_text(r"\documentclass{ctexart}\begin{document}测试\end{document}", encoding="utf-8")
+        (thesis / "refs.bib").write_text("@article{x,title={x}}\n", encoding="utf-8")
+        (figures / "system.png").write_bytes(b"not a real png")
+        (refs / "江苏海洋大学毕业论文模板.docx").write_bytes(b"placeholder")
+        (refs / "毕业论文手册.pdf").write_bytes(b"placeholder")
+        (refs / "2021122428-学长-定稿.docx").write_bytes(b"placeholder")
+
+        report = audit_project(root)
+
+    assert report["ok"]
+    assert report["source_ready"]
+    assert report["governance_ready"]
+    assert report["found"]["latex_main"] == ["thesis/main.tex"]
+    assert report["found"]["bibliography"] == ["thesis/refs.bib"]
+    assert report["found"]["figure_assets"] == ["thesis/figures/system.png"]
+    assert any(command.startswith("nwt draft-latex thesis/main.tex") for command in report["recommended_commands"])
+
+
+def test_intake_blocks_uncontrolled_pdf_only_flow() -> None:
+    with tempfile.TemporaryDirectory(prefix="nwt-intake-missing-") as td:
+        root = Path(td)
+        (root / "main.pdf").write_bytes(b"placeholder")
+
+        report = audit_project(root)
+
+    assert not report["ok"]
+    assert report["source_ready"]
+    assert not report["governance_ready"]
+    assert any("模板" in warning for warning in report["warnings"])

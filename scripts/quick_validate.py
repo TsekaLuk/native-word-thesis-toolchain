@@ -3,8 +3,11 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
+import sys
 
 from docx import Document
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from native_word_thesis.ooxml import polish_docx
 from native_word_thesis.validate import validate_docx

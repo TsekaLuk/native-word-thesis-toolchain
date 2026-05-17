@@ -25,6 +25,14 @@ python3 -m pip install -e .
 
 ## 基本流程
 
+0. 新论文接入前先做材料审计，确认有没有结构化源文件、学校模板/手册、学长定稿、插图资产和参考文献：
+
+```bash
+nwt intake /path/to/thesis-project --json build/intake-report.json
+```
+
+这个报告用于决定能否直接进入 LaTeX/Pandoc + OOXML 后处理路径；如果只有 PDF，或缺少模板/手册/定稿参照，应先补齐输入，不要直接开始“凭感觉修 Word”。
+
 1. 从 LaTeX 生成 Word 草稿：
 
 ```bash

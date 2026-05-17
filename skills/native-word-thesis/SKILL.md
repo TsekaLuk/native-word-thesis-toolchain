@@ -9,21 +9,26 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
 
 ## Default Workflow
 
-1. Locate source artifacts: LaTeX/PDF, generated draft DOCX, school handbook/template, accepted reference thesis, figures, bibliography, and any generated reports.
-2. Prefer LaTeX/Pandoc draft generation over PDF-to-Word:
+1. Run intake on the new thesis folder before touching Word layout. This prevents repeating missing-template/PDF-only/manual-fix loops:
+   ```bash
+   nwt intake /path/to/thesis-project --json build/intake-report.json
+   ```
+   Confirm the report has source input plus at least one authoritative formatting input: school handbook/template or accepted reference thesis.
+2. Locate source artifacts: LaTeX/PDF, generated draft DOCX, school handbook/template, accepted reference thesis, figures, bibliography, and any generated reports.
+3. Prefer LaTeX/Pandoc draft generation over PDF-to-Word:
    ```bash
    nwt draft-latex thesis/main.tex build/draft.docx --resource-path thesis
    ```
-3. Create or adapt a YAML config for the school/project. Start from `examples/jou-thesis.yaml` in this repo.
-4. Polish the draft:
+4. Create or adapt a YAML config for the school/project. Start from `examples/jou-thesis.yaml` in this repo.
+5. Polish the draft:
    ```bash
    nwt polish build/draft.docx build/native.docx --config examples/jou-thesis.yaml
    ```
-5. Validate structure:
+6. Validate structure:
    ```bash
    nwt validate build/native.docx --config examples/jou-thesis.yaml --json build/native-report.json
    ```
-6. Run reusable OOXML guardrails before visual inspection. Start from the nearest school config and change only template-specific parameters:
+7. Run reusable OOXML guardrails before visual inspection. Start from the nearest school config and change only template-specific parameters:
    ```bash
    python scripts/ooxml_thesis_guard.py build/native.docx \
      --config examples/jou-ooxml-guard.json \
@@ -36,13 +41,14 @@ Use this skill for thesis Word delivery, especially when a PDF is not acceptable
      --config examples/jou-ooxml-guard.json \
      --fix-out build/native.fixed.docx
    ```
-7. Render through a real office engine and inspect page images:
+8. Render through a real office engine and inspect page images:
    ```bash
    nwt render-pages build/native.docx build/native-pages.pdf --engine pages
    ```
 
 ## Reusable Toolchain
 
+- `nwt intake`: new-thesis input audit. It finds likely LaTeX entry files, compiled PDFs, draft DOCX files, bibliography, figure assets, school templates/handbooks, and accepted reference DOCX files, then emits a JSON report and recommended next commands. Use it before any one-off conversion or manual Word repair.
 - `scripts/ooxml_thesis_guard.py`: template-aware OOXML audit and optional repair. It checks heading levels/toggle noise, native Chinese style-gallery names and visibility, residual conversion paragraph styles, caption and image centering without inherited indents, header bottom borders/spacers/NBSP page labels, duplicate reference numbering, front-matter empty break paragraphs, exposed field-code artifacts, Latin run fonts, drawing size ceilings, and OMML/subscript/simple-numeric math invariants.
 - `examples/jou-ooxml-guard.json`: JOU-style baseline config. Copy it per school or per customer; adjust the header text, spacer length, title/caption rules, figure size caps, and math thresholds instead of rewriting XPath.
 - Use `--json-out` as the handoff artifact. It gives stable metrics such as heading counts, caption count, drawing count, max drawing size, reference heading location, and math object counts, so future reviews can compare runs rather than relying on screenshots only.

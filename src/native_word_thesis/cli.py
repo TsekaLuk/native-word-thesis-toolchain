@@ -10,6 +10,7 @@ from typing import Any
 
 import yaml
 
+from .intake import audit_project
 from .ooxml import copy_skill_to, polish_docx
 from .render import render_docx
 from .validate import dump_report, validate_docx
@@ -48,6 +49,12 @@ def cmd_draft_latex(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_intake(args: argparse.Namespace) -> int:
+    report = audit_project(args.project)
+    print(dump_report(report, args.json))
+    return 0 if report["ok"] or args.soft else 1
+
+
 def cmd_polish(args: argparse.Namespace) -> int:
     config = load_config(args.config)
     report = polish_docx(args.input, args.output, config)
@@ -80,6 +87,12 @@ def cmd_install_skill(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="native-word-thesis")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    intake = sub.add_parser("intake", help="Audit whether a new thesis project has the inputs needed for native Word conversion")
+    intake.add_argument("project", type=Path)
+    intake.add_argument("--json", type=Path)
+    intake.add_argument("--soft", action="store_true", help="Always exit 0 while still printing the report")
+    intake.set_defaults(func=cmd_intake)
 
     draft = sub.add_parser("draft-latex", help="Convert a LaTeX source file to a draft .docx with pandoc")
     draft.add_argument("input", type=Path)
