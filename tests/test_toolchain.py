@@ -74,8 +74,13 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
         cfg = root / "guard.json"
 
         from docx import Document
+        from docx.enum.style import WD_STYLE_TYPE
 
         doc = Document()
+        compact_style = doc.styles.add_style("Compact", WD_STYLE_TYPE.PARAGRAPH)
+        compact_style.name = "Compact"
+        leaked = doc.add_paragraph("converted table/body residue")
+        leaked.style = compact_style
         doc.add_paragraph('图 3.2 系统功能模块结构图 TC "图 3.2 系统功能模块结构图" \\f F \\l 1')
         latin = doc.add_paragraph().add_run("ASP.NET Core")
         latin.font.name = "Arial"
@@ -150,6 +155,7 @@ def test_ooxml_guard_catches_field_font_and_numeric_artifacts() -> None:
     codes = {warning["code"] for warning in report["warnings"]}
     assert "forbidden_field_code_text" in codes
     assert "latin_font_mismatch" in codes
+    assert "conversion_style_residue" in codes
     assert "math_run_font_missing" in codes
     assert "math_upright_text_font_mismatch" in codes
     assert "simple_numeric_omml" in codes

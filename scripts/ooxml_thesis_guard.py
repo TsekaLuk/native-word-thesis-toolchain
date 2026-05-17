@@ -43,6 +43,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "visible_qformat_styles": [],
         "hidden_qformat_styles": [],
     },
+    "conversion_styles": {
+        "forbid_paragraph_styles": ["Compact", "FirstParagraph", "CaptionedFigure"],
+        "body_style": "BodyText",
+        "table_body_style": "TableBody",
+    },
     "caption_pattern": r"^(图|表)\s*\d+[-.]\d+\s+",
     "exclude_list_entries_with_tabs": True,
     "require_caption_center": True,
@@ -160,6 +165,25 @@ def math_run_prefers_text_font(run: etree._Element) -> bool:
 def style_id(p: etree._Element) -> str:
     node = p.find("./w:pPr/w:pStyle", namespaces=NS)
     return node.get(qn("w:val"), "") if node is not None else ""
+
+
+def has_ancestor(node: etree._Element, tag: str) -> bool:
+    current = node.getparent()
+    target = qn(tag)
+    while current is not None:
+        if current.tag == target:
+            return True
+        current = current.getparent()
+    return False
+
+
+def set_paragraph_style(p: etree._Element, sid: str) -> None:
+    p_pr = get_or_add(p, "pPr")
+    p_style = p_pr.find("w:pStyle", namespaces=NS)
+    if p_style is None:
+        p_style = etree.Element(f"{{{W}}}pStyle")
+        p_pr.insert(0, p_style)
+    p_style.set(qn("w:val"), sid)
 
 
 def jc_val(p: etree._Element) -> str | None:
@@ -383,6 +407,29 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             if fix:
                 set_style_gallery_visibility(style, False)
                 fixes.append(f"hid style {sid_hidden} from gallery")
+
+    conversion_cfg = cfg.get("conversion_styles", {})
+    forbidden_conversion_styles = set(conversion_cfg.get("forbid_paragraph_styles", []))
+    conversion_style_hits: list[dict[str, Any]] = []
+    if forbidden_conversion_styles:
+        for idx, p in enumerate(paragraphs):
+            sid = style_id(p)
+            if sid not in forbidden_conversion_styles:
+                continue
+            text = paragraph_text(p)
+            hit = {
+                "paragraph": idx,
+                "styleId": sid,
+                "inside_table": has_ancestor(p, "w:tbl"),
+                "text": text[:120],
+            }
+            conversion_style_hits.append(hit)
+            warnings.append({"code": "conversion_style_residue", **hit})
+            if fix:
+                replacement = conversion_cfg.get("table_body_style") if hit["inside_table"] else conversion_cfg.get("body_style")
+                if replacement:
+                    set_paragraph_style(p, replacement)
+                    fixes.append(f"mapped paragraph {idx} style {sid} to {replacement}")
 
     caption_re = re.compile(cfg["caption_pattern"])
     caption_count = 0
@@ -722,6 +769,7 @@ def audit_unpacked(root_dir: Path, cfg: dict[str, Any], fix: bool = False) -> di
             "heading_effective_toggles": heading_effective_toggles,
             "heading_toggle_noise": heading_toggle_noise,
             "style_gallery_checks": style_gallery_checks,
+            "conversion_style_hits": conversion_style_hits,
             "caption_count": caption_count,
             "drawing_count": drawing_count,
             "max_drawing_inches": [round(max_drawing_width, 3), round(max_drawing_height, 3)],
